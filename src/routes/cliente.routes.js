@@ -5,6 +5,8 @@ const prisma = require("../lib/prisma");
 
 // ✅ Criar cliente
 router.post("/", async (req, res) => {
+  console.log("🔥 CHEGOU REQUISIÇÃO");
+  console.log(req.body);
   try {
     const cliente = await prisma.cliente.create({
       data: req.body,
@@ -12,6 +14,7 @@ router.post("/", async (req, res) => {
 
     res.json(cliente);
   } catch (error) {
+    console.error("ERRO:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -23,6 +26,7 @@ router.get("/", async (req, res) => {
     const clientes = await prisma.cliente.findMany();
     res.json(clientes);
   } catch (error) {
+    console.error("ERRO:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -39,6 +43,7 @@ router.put("/:id", async (req, res) => {
 
     res.json(cliente);
   } catch (error) {
+    console.error("ERRO:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -55,6 +60,7 @@ router.delete("/:id", async (req, res) => {
 
     res.json({ message: "Cliente deletado com sucesso" });
   } catch (error) {
+    console.error("ERRO:", error);
     res.status(500).json({ error: error.message });
   }
 });
