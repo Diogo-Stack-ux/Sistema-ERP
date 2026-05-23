@@ -21,6 +21,7 @@ model Cliente {
 model Produto {
   id        Int      @id @default(autoincrement())
   nome      String
+  sku       String?  @unique
   quantidade Int
   preco     Float
   tipo      String

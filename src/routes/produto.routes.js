@@ -5,8 +5,25 @@ const prisma = require("../lib/prisma");
 // ✅ Criar produto
 router.post("/", async (req, res) => {
   try {
+    const { nome, preco, quantidade, tipo, sku } = req.body;
+
+    if (!nome || tipo === undefined || tipo === "" || preco === undefined || quantidade === undefined) {
+      return res.status(400).json({ error: "nome, preco, quantidade e tipo são obrigatórios" });
+    }
+
+    const data = {
+      nome,
+      preco: Number(preco),
+      quantidade: Number(quantidade),
+      tipo,
+    };
+
+    if (sku !== undefined && sku !== null) {
+      data.sku = sku;
+    }
+
     const produto = await prisma.produto.create({
-      data: req.body,
+      data,
     });
     res.json(produto);
   } catch (error) {
@@ -27,9 +44,26 @@ router.get("/", async (req, res) => {
 // ✏️ Atualizar
 router.put("/:id", async (req, res) => {
   try {
+    const { nome, preco, quantidade, tipo, sku } = req.body;
+
+    if (!nome || tipo === undefined || tipo === "" || preco === undefined || quantidade === undefined) {
+      return res.status(400).json({ error: "nome, preco, quantidade e tipo são obrigatórios" });
+    }
+
+    const data = {
+      nome,
+      preco: Number(preco),
+      quantidade: Number(quantidade),
+      tipo,
+    };
+
+    if (sku !== undefined && sku !== null) {
+      data.sku = sku;
+    }
+
     const produto = await prisma.produto.update({
       where: { id: Number(req.params.id) },
-      data: req.body,
+      data,
     });
     res.json(produto);
   } catch (error) {
