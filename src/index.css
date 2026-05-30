@@ -65,7 +65,7 @@ body {
 }
 
 #root {
-  width: 1126px;
+  width: 100%;
   max-width: 100%;
   margin: 0 auto;
   text-align: center;
@@ -169,7 +169,7 @@ code {
 }
 
 .calendario-card .fc .fc-toolbar-title {
-  color: #020617;
+  color: #f8fafc;
   font-size: 20px;
   font-weight: 800;
   text-transform: capitalize;

@@ -11,9 +11,153 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import api from "./services/api";
+import Services from "./pages/Services/Services";
 
 function App() {
   const [pagina, setPagina] = useState("dashboard");
+  const [token, setToken] = useState(
+    localStorage.getItem("token") || ""
+  );
+
+  const [loginData, setLoginData] = useState({
+    email: "",
+    senha: "",
+  });
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [loginErro, setLoginErro] = useState("");
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+
+  const fazerLogin = async () => {
+    try {
+      setLoginErro("");
+
+      const response =
+        await api.post("/auth/login", {
+          email: loginData.email,
+          senha: loginData.senha,
+        });
+
+      localStorage.setItem(
+        "token",
+        response.data.token
+      );
+
+      setToken(response.data.token);
+
+      api.defaults.headers.Authorization =
+        `Bearer ${response.data.token}`;
+    } catch (error) {
+      console.error(error);
+      setLoginErro("E-mail ou senha incorretos. Confira os dados e tente novamente.");
+    }
+  };
+
+  const fazerLoginGoogle = async (credential) => {
+    try {
+      setLoginErro("");
+
+      const response =
+        await api.post("/auth/google", {
+          credential,
+        });
+
+      localStorage.setItem(
+        "token",
+        response.data.token
+      );
+
+      setToken(response.data.token);
+
+      api.defaults.headers.Authorization =
+        `Bearer ${response.data.token}`;
+    } catch (error) {
+      console.error(error);
+      setLoginErro("Nao foi possivel entrar com Google. Tente novamente.");
+    }
+  };
+
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [cadastroData, setCadastroData] = useState({
+    nome: "",
+    email: "",
+    senha: "",
+  });
+
+  const fazerCadastro = async () => {
+    try {
+      await api.post("/auth/register", {
+        nome: cadastroData.nome,
+        email: cadastroData.email,
+        senha: cadastroData.senha,
+      });
+
+      const loginResponse = await api.post("/auth/login", {
+        email: cadastroData.email,
+        senha: cadastroData.senha,
+      });
+
+      localStorage.setItem(
+        "token",
+        loginResponse.data.token
+      );
+
+      setToken(loginResponse.data.token);
+      api.defaults.headers.Authorization =
+        `Bearer ${loginResponse.data.token}`;
+    } catch (error) {
+      console.error(error);
+      alert("Erro ao cadastrar. Verifique os dados e tente novamente.");
+    }
+  };
+
+  useEffect(() => {
+    if (token) {
+      api.defaults.headers.Authorization =
+        `Bearer ${token}`;
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (token || isRegistering || !googleClientId) {
+      return;
+    }
+
+    const renderizarBotaoGoogle = () => {
+      const botaoGoogle = document.getElementById("google-login-button");
+
+      if (!window.google || !botaoGoogle) {
+        return;
+      }
+
+      botaoGoogle.innerHTML = "";
+
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: (response) => fazerLoginGoogle(response.credential),
+      });
+
+      window.google.accounts.id.renderButton(botaoGoogle, {
+        theme: "filled_black",
+        size: "large",
+        shape: "pill",
+        text: "signin_with",
+        width: botaoGoogle.offsetWidth,
+      });
+    };
+
+    if (window.google) {
+      renderizarBotaoGoogle();
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = renderizarBotaoGoogle;
+    document.body.appendChild(script);
+  }, [token, isRegistering, googleClientId]);
+
   const [dados, setDados] = useState({
     totalClientes: 0,
     totalProdutos: 0,
@@ -500,6 +644,250 @@ function App() {
       : "text-slate-300 hover:bg-slate-800 hover:text-white"
     }`;
 
+  if (!token) {
+    return (
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.2),_transparent_25%),radial-gradient(circle_at_bottom_right,_rgba(236,72,153,0.18),_transparent_22%),bg-slate-950] flex items-center justify-center px-4 py-10">
+        <div className="w-full max-w-md rounded-[2rem] border border-white/10 bg-slate-900/95 shadow-2xl shadow-violet-500/20 backdrop-blur-xl overflow-hidden">
+          <div className="bg-gradient-to-r from-indigo-500 via-violet-600 to-fuchsia-500 px-8 py-10 text-center">
+            <p className="text-xs uppercase tracking-[0.4em] text-slate-200/80 mb-3">Bem-vindo ao</p>
+            <h1 className="text-4xl font-black text-white tracking-tight">Nuvix Organizer</h1>
+            <p className="mt-3 text-sm text-slate-200/80 leading-relaxed">
+              Faça login para acessar o painel de controle e gerenciar seu negócio com segurança.
+            </p>
+          </div>
+
+          <div className="px-8 py-10 space-y-6">
+            <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/90 p-6 shadow-[0_30px_80px_-40px_rgba(124,58,237,0.75)]">
+              <p className="mb-6 text-sm uppercase tracking-[0.3em] text-slate-400">
+                {isRegistering ? "Crie sua conta" : "Acesse sua conta"}
+              </p>
+
+              {isRegistering && (
+                <input
+                  type="text"
+                  placeholder="Nome"
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-900/80 px-4 py-3 text-slate-100 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20 mb-4"
+                  value={cadastroData.nome}
+                  onChange={(e) =>
+                    setCadastroData({
+                      ...cadastroData,
+                      nome: e.target.value,
+                    })
+                  }
+                />
+              )}
+
+              <input
+                type="email"
+                placeholder="Email"
+                className="w-full rounded-2xl border border-slate-700 bg-slate-900/80 px-4 py-3 text-slate-100 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20"
+                value={isRegistering ? cadastroData.email : loginData.email}
+                onChange={(e) => {
+                  if (isRegistering) {
+                    setCadastroData({
+                        ...cadastroData,
+                        email: e.target.value,
+                    });
+                    return;
+                  }
+
+                  setLoginErro("");
+                  setLoginData({
+                    ...loginData,
+                    email: e.target.value,
+                  });
+                }}
+              />
+
+              <div className="relative mt-4">
+                <input
+                  type={mostrarSenha ? "text" : "password"}
+                  placeholder="Senha"
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-900/80 px-4 py-3 pr-14 text-slate-100 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20"
+                  value={isRegistering ? cadastroData.senha : loginData.senha}
+                  onChange={(e) => {
+                    if (isRegistering) {
+                      setCadastroData({
+                          ...cadastroData,
+                          senha: e.target.value,
+                      });
+                      return;
+                    }
+
+                    setLoginErro("");
+                    setLoginData({
+                      ...loginData,
+                      senha: e.target.value,
+                    });
+                  }}
+                />
+                <button
+                  type="button"
+                  aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+                  title={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+                  onClick={() => setMostrarSenha(!mostrarSenha)}
+                  className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-800 hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                >
+                  {mostrarSenha ? (
+                    <svg
+                      aria-hidden="true"
+                      className="h-5 w-5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                      <path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                      <path d="M2 2l20 20" />
+                      <path d="M9.88 9.88A3 3 0 0 0 14.12 14.12" />
+                    </svg>
+                  ) : (
+                    <svg
+                      aria-hidden="true"
+                      className="h-5 w-5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+
+              {!isRegistering && loginErro && (
+                <div
+                  role="alert"
+                  className="mt-4 flex gap-3 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-left shadow-lg shadow-rose-950/20"
+                >
+                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-500/15 text-rose-300 ring-1 ring-rose-300/20">
+                    <svg
+                      aria-hidden="true"
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M12 8v4" />
+                      <path d="M12 16h.01" />
+                    </svg>
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-rose-100">
+                      Login invalido
+                    </p>
+                    <p className="mt-1 text-sm leading-5 text-rose-100/75">
+                      {loginErro}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {!isRegistering && (
+                <div className="mt-5">
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="h-px flex-1 bg-slate-700/70" />
+                    <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                      ou
+                    </span>
+                    <span className="h-px flex-1 bg-slate-700/70" />
+                  </div>
+
+                  {googleClientId ? (
+                    <div
+                      id="google-login-button"
+                      className="flex min-h-11 w-full justify-center"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setLoginErro("Login com Google ainda nao configurado. Configure o Client ID do Google no frontend e no backend.")
+                      }
+                      className="flex h-12 w-full items-center justify-center gap-3 rounded-2xl border border-slate-700 bg-slate-900/80 px-4 text-sm font-semibold text-slate-200 transition hover:border-slate-500 hover:bg-slate-800"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        className="h-5 w-5"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          fill="#4285F4"
+                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                        />
+                        <path
+                          fill="#34A853"
+                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                        />
+                        <path
+                          fill="#FBBC05"
+                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"
+                        />
+                        <path
+                          fill="#EA4335"
+                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"
+                        />
+                      </svg>
+                      Entrar com Google
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={isRegistering ? fazerCadastro : fazerLogin}
+              className="w-full rounded-3xl bg-gradient-to-r from-fuchsia-500 via-violet-500 to-indigo-500 py-4 text-lg font-semibold text-white shadow-xl shadow-fuchsia-500/25 transition hover:-translate-y-0.5 hover:shadow-fuchsia-500/40"
+            >
+              {isRegistering ? "Cadastrar" : "Entrar"}
+            </button>
+
+            <p className="text-center text-sm text-slate-400">
+              {isRegistering ? (
+                <>
+                  Já possui conta?{' '}
+                  <button
+                    onClick={() => {
+                      setLoginErro("");
+                      setIsRegistering(false);
+                    }}
+                    className="font-semibold text-slate-100 hover:text-white"
+                  >
+                    Fazer login
+                  </button>
+                </>
+              ) : (
+                <>
+                  Ainda não possui conta?{' '}
+                  <button
+                    onClick={() => {
+                      setLoginErro("");
+                      setIsRegistering(true);
+                    }}
+                    className="font-semibold text-slate-100 hover:text-white"
+                  >
+                    Criar conta
+                  </button>
+                </>
+              )}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen text-slate-100 app-shell">
       <aside className="w-72 min-h-screen rounded-r-[2rem] px-6 py-8 text-white shadow-2xl sidebar-panel">
@@ -533,6 +921,12 @@ function App() {
             Produtos
           </button>
           <button
+            onClick={() => setPagina("services")}
+            className={`${botaoMenuClasse("services")} px-3.5 py-2.5 text-[13px]`}
+          >
+            Serviços
+          </button>
+          <button
             onClick={() => setPagina("movimentacoes")}
             className={`${botaoMenuClasse("movimentacoes")} px-3.5 py-2.5 text-[13px]`}
           >
@@ -551,10 +945,20 @@ function App() {
             Calendário
           </button>
         </nav>
+
+        <button
+          onClick={() => {
+            localStorage.removeItem("token");
+            setToken("");
+          }}
+          className="text-left hover:bg-red-600 bg-red-500 p-2 rounded mt-10"
+        >
+          Sair
+        </button>
       </aside>
 
       <main className="flex-1 px-3 py-5 md:px-4 lg:px-5">
-        <div className="mx-auto w-full max-w-[62rem]">
+        <div className="w-full">
           {pagina === "dashboard" && (
             <>
               <div className="mb-7">
@@ -677,6 +1081,8 @@ function App() {
             </>
           )}
 
+          {pagina === "services" && <Services />}
+
           {pagina === "clientes" && (
             <section>
               <div className="mb-4">
@@ -701,7 +1107,7 @@ function App() {
                 </div>
               </div>
 
-              <div className="mx-auto max-w-[54rem] rounded-[1.25rem] bg-white p-3 shadow-xl shadow-slate-200/70 ring-1 ring-slate-200 md:p-3.5">
+              <div className="mx-auto w-full max-w-5xl rounded-[1.5rem] glass-card p-5 ring-1 ring-slate-200/10 md:p-5">
                 <div className="grid grid-cols-1 gap-2 xl:grid-cols-[0.7fr_0.85fr_0.62fr_0.72fr_auto]">
                   <input
                     className="h-9 rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-[11px] text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
@@ -747,8 +1153,8 @@ function App() {
                   </div>
                 </div>
 
-                <div className="mt-3.5 overflow-hidden rounded-[1rem] border border-slate-200">
-                  <div className="hidden grid-cols-[0.65fr_0.9fr_0.65fr_0.68fr_0.55fr] bg-slate-900 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-100 md:grid">
+                <div className="mt-3.5 overflow-hidden rounded-[1rem] border border-slate-200 bg-slate-950/40">
+                  <div className="hidden grid-cols-[0.65fr_0.9fr_0.65fr_0.68fr_0.55fr] bg-slate-900 text-xs font-semibold uppercase tracking-[0.12em] text-slate-100 md:grid">
                     <div className="px-2.5 py-2">Nome</div>
                     <div className="px-2.5 py-2">Email</div>
                     <div className="px-2.5 py-2">Telefone</div>
@@ -757,40 +1163,40 @@ function App() {
                   </div>
 
                   {clientes.length === 0 && (
-                    <div className="bg-slate-50 px-6 py-12 text-center text-sm text-slate-500">
+                    <div className="bg-slate-950/30 px-6 py-12 text-center text-sm text-slate-400">
                       Nenhum cliente cadastrado.
                     </div>
                   )}
 
                   {clientes.map((c) => (
-                    <div key={c.id} className="border-t border-slate-200 bg-white first:border-t-0">
+                    <div key={c.id} className="border-t border-slate-700 bg-slate-950/80 first:border-t-0">
                       <div className="grid gap-2 px-2.5 py-2 md:grid-cols-[0.65fr_0.9fr_0.65fr_0.68fr_0.55fr] md:items-center md:gap-1.5 md:px-2.5">
                         <div>
                           <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 md:hidden">
                             Nome
                           </p>
-                          <p className="truncate text-[10px] font-semibold text-slate-900">{c.nome}</p>
+                          <p className="truncate text-sm font-semibold text-slate-100">{c.nome}</p>
                         </div>
 
                         <div>
                           <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 md:hidden">
                             Email
                           </p>
-                          <p className="truncate text-[10px] text-slate-600">{c.email}</p>
+                          <p className="truncate text-sm text-slate-300">{c.email}</p>
                         </div>
 
                         <div>
                           <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 md:hidden">
                             Telefone
                           </p>
-                          <p className="truncate text-[10px] text-slate-600">{c.telefone}</p>
+                          <p className="truncate text-sm text-slate-300">{c.telefone}</p>
                         </div>
 
                         <div>
                           <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 md:hidden">
                             Endereco
                           </p>
-                          <p className="truncate text-[10px] text-slate-600">{c.endereco}</p>
+                          <p className="truncate text-sm text-slate-300">{c.endereco}</p>
                         </div>
 
                         <div className="flex gap-1 md:justify-center">
@@ -802,13 +1208,13 @@ function App() {
                               setTelefone(c.telefone);
                               setEndereco(c.endereco);
                             }}
-                            className="rounded-md bg-blue-50 px-1.5 py-1 text-[9px] font-semibold text-blue-700 transition hover:bg-blue-100"
+                            className="rounded-md bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-700 transition hover:bg-blue-100"
                           >
                             Editar
                           </button>
                           <button
                             onClick={() => deletarCliente(c.id)}
-                            className="rounded-md bg-red-50 px-1.5 py-1 text-[9px] font-semibold text-red-600 transition hover:bg-red-100"
+                            className="rounded-md bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-600 transition hover:bg-red-100"
                           >
                             Excluir
                           </button>
@@ -978,13 +1384,21 @@ function App() {
             </div>
           )}
           {pagina === "movimentacoes" && (
-            <div className="mx-auto w-full max-w-5xl rounded-[1.5rem] bg-white p-5 shadow-xl shadow-slate-200/70 ring-1 ring-slate-200">
-              <h1 className="text-2xl font-black mb-4">Movimentações</h1>
+            <div className="mx-auto w-full max-w-5xl rounded-[1.5rem] glass-card p-5 ring-1 ring-slate-200/10">
+              <div className="mb-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
+                  Movimentações
+                </p>
+                <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-100">
+                  Movimentações
+                </h1>
+                <p className="mt-1 text-sm text-slate-400">
+                  Registre entradas e saídas para manter o estoque atualizado e o histórico organizado.
+                </p>
+              </div>
 
               {/* FORM */}
               <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[1.3fr_0.9fr_0.9fr_auto]">
-
-                {/* PRODUTO */}
                 <select
                   className="min-w-0 border border-slate-200 bg-slate-50 px-3 py-2 rounded-lg text-sm text-slate-700 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
                   value={produtoId || ""}
@@ -998,7 +1412,6 @@ function App() {
                   ))}
                 </select>
 
-                {/* TIPO */}
                 <select
                   className="min-w-0 border border-slate-200 bg-slate-50 px-3 py-2 rounded-lg text-sm text-slate-700 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
                   value={tipo}
@@ -1008,7 +1421,6 @@ function App() {
                   <option value="saida">Saída</option>
                 </select>
 
-                {/* QUANTIDADE */}
                 <input
                   type="number"
                   className="min-w-0 border border-slate-200 bg-slate-50 px-3 py-2 rounded-lg text-sm text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
@@ -1017,40 +1429,36 @@ function App() {
                   onChange={(e) => setQuantidadeMov(e.target.value ? Number(e.target.value) : 0)}
                 />
 
-                {/* BOTÃO */}
                 <button
                   onClick={criarMovimentacao}
-                  className="w-full rounded-lg bg-slate-950 px-4 py-2 text-white transition hover:bg-slate-800 sm:w-auto sm:min-w-[8rem]"
+                  className="w-full rounded-lg bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 px-4 py-2 text-white transition hover:opacity-90 sm:w-auto sm:min-w-[8rem]"
                 >
                   Registrar
                 </button>
               </div>
 
               {/* LISTA */}
-              <div className="bg-slate-50 p-4 rounded-3xl shadow-inner shadow-slate-100/70">
+              <div className="bg-slate-950/40 p-4 rounded-3xl">
                 {movimentacoes.length === 0 ? (
-                  <p className="text-gray-500">Nenhuma movimentação cadastrada</p>
+                  <p className="text-slate-400">Nenhuma movimentação cadastrada</p>
                 ) : (
                   movimentacoes.map((m) => (
                     <div
                       key={m.id}
-                      className="flex flex-col gap-3 border-b py-4 sm:flex-row sm:items-center sm:justify-between"
+                      className="flex flex-col gap-3 border-b border-slate-700/50 py-4 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div>
-                        <p className="font-semibold">
+                        <p className="font-semibold text-slate-100">
                           {m.produto?.nome || "Produto não encontrado"}
                         </p>
 
                         <p
-                          className={`text-sm ${m.tipo === "entrada"
-                              ? "text-green-600"
-                              : "text-red-600"
-                            }`}
+                          className={`text-sm ${m.tipo === "entrada" ? "text-emerald-400" : "text-rose-400"}`}
                         >
                           {m.tipo.toUpperCase()} - {m.quantidade}
                         </p>
 
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-slate-400">
                           {new Date(m.data).toLocaleString()}
                         </p>
                       </div>
@@ -1150,22 +1558,22 @@ function App() {
             </div>
           )}
           {pagina === "calendario" && (
-            <div className="mx-auto w-full max-w-5xl rounded-[1.5rem] bg-white p-5 text-left shadow-xl shadow-slate-200/70 ring-1 ring-slate-200">
+            <div className="mx-auto w-full max-w-5xl rounded-[1.5rem] glass-card p-5 text-left ring-1 ring-slate-200/10">
               <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
                     Agenda
                   </p>
-                  <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-900">
+                  <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-100">
                     Calendário
                   </h1>
-                  <p className="mt-1 text-sm text-slate-600">
+                  <p className="mt-1 text-sm text-slate-400">
                     Visualize eventos, compromissos e datas importantes do sistema.
                   </p>
                 </div>
 
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <div className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">
+                  <div className="rounded-lg bg-slate-900/80 px-3 py-2 text-sm font-semibold text-slate-100">
                     {eventos.length} evento{eventos.length === 1 ? "" : "s"}
                   </div>
                   <button
@@ -1178,7 +1586,7 @@ function App() {
               </div>
 
               {lembretes.length > 0 && (
-                <div className="mb-4 rounded border border-slate-700 bg-slate-900/60 p-4">
+                <div className="mb-4 rounded-3xl border border-slate-700 bg-slate-950/50 p-4">
                   <h2 className="mb-2 font-bold text-slate-100">
                     🔔 Lembretes
                   </h2>
@@ -1187,12 +1595,12 @@ function App() {
                     {lembretes.map((evento) => (
                       <div
                         key={evento.id}
-                        className="rounded bg-slate-800 p-3 shadow-sm"
+                        className="rounded-3xl bg-slate-900/80 p-3 shadow-sm shadow-slate-950/30"
                       >
-                        <div className="flex items-start justify-between gap-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div>
                             <p className="font-semibold text-slate-100">{evento.title}</p>
-                            <p className="mt-1 text-sm text-slate-300">
+                            <p className="mt-1 text-sm text-slate-400">
                               {new Date(evento.date + 'T00:00:00').toLocaleDateString('pt-BR')}
                             </p>
                           </div>
@@ -1213,15 +1621,15 @@ function App() {
                 <select
                   value={filtroCalendario}
                   onChange={(e) => setFiltroCalendario(e.target.value)}
-                  className="rounded border border-slate-300 bg-white p-2 text-black"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
                 >
-                  <option className="bg-white text-black" value="todos">Todos</option>
-                  <option className="bg-white text-black" value="reuniao">Reuniões</option>
-                  <option className="bg-white text-black" value="entrega">Entregas</option>
-                  <option className="bg-white text-black" value="financeiro">Financeiro</option>
-                  <option className="bg-white text-black" value="tarefa">Tarefas</option>
-                  <option className="bg-white text-black" value="concluidos">Concluídos</option>
-                  <option className="bg-white text-black" value="pendentes">Pendentes</option>
+                  <option className="bg-slate-950 text-slate-100" value="todos">Todos</option>
+                  <option className="bg-slate-950 text-slate-100" value="reuniao">Reuniões</option>
+                  <option className="bg-slate-950 text-slate-100" value="entrega">Entregas</option>
+                  <option className="bg-slate-950 text-slate-100" value="financeiro">Financeiro</option>
+                  <option className="bg-slate-950 text-slate-100" value="tarefa">Tarefas</option>
+                  <option className="bg-slate-950 text-slate-100" value="concluidos">Concluídos</option>
+                  <option className="bg-slate-950 text-slate-100" value="pendentes">Pendentes</option>
                 </select>
               </div>
 
