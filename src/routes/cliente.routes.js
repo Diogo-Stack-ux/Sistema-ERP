@@ -1,7 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const prisma = require("../lib/prisma");
+const auth = require("../middlewares/auth");
 
+router.use(auth);
 
 // ✅ Criar cliente
 router.post("/", async (req, res) => {
@@ -21,7 +23,7 @@ router.post("/", async (req, res) => {
 
 
 // ✅ Listar clientes
-router.get("/", async (req, res) => {
+router.get("/", auth, async (req, res) => {
   try {
     const clientes = await prisma.cliente.findMany();
     res.json(clientes);

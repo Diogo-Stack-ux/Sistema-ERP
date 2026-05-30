@@ -1,6 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const prisma = require("../lib/prisma");
+const auth = require("../middlewares/auth");
+
+router.use(auth);
 
 // 💸 Criar gasto
 router.post("/", async (req, res) => {

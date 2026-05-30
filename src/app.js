@@ -8,6 +8,8 @@ const movimentacaoRoutes = require("./routes/movimentacao.routes");
 const gastoRoutes = require("./routes/gasto.routes");
 const dashboardRoutes = require("./routes/dashboard.routes");
 const eventoRoutes = require("./routes/evento.routes");
+const authRoutes = require("./routes/auth.routes");
+const serviceRoutes = require("./routes/service.routes");
 
 
 app.use(cors());
@@ -18,6 +20,8 @@ app.use("/movimentacoes", movimentacaoRoutes);
 app.use("/gastos", gastoRoutes);
 app.use("/eventos", eventoRoutes);
 app.use("/dashboard", dashboardRoutes);
+app.use("/auth", authRoutes);
+app.use("/services", serviceRoutes);
 
 
 app.get("/", (req, res) => {

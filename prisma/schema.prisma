@@ -60,3 +60,26 @@ model Evento {
 
   createdAt   DateTime @default(now())
 }
+
+model Usuario {
+  id        Int      @id @default(autoincrement())
+  nome      String
+  email     String   @unique
+  senha     String
+
+  createdAt DateTime @default(now())
+}
+
+model Service {
+  id          Int      @id @default(autoincrement())
+  nome        String
+  descricao   String?
+  categoria   String?
+  valor       Decimal  @db.Decimal(10,2)
+  garantia    Int?     // dias
+  duracao     Int?     // minutos
+  ativo       Boolean  @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

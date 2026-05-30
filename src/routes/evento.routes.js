@@ -1,7 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const prisma = require("../lib/prisma");
+const auth = require("../middlewares/auth");
 
+router.use(auth);
 
 // 📌 LISTAR EVENTOS
 router.get("/", async (req, res) => {
