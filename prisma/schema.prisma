@@ -15,7 +15,8 @@ model Cliente {
   endereco  String
   createdAt DateTime @default(now())
 
-  eventos   Evento[]
+  eventos         Evento[]
+  ordensServico   OrdemServico[]
 }
 
 model Produto {
@@ -28,6 +29,7 @@ model Produto {
   createdAt DateTime @default(now())
 
   movimentacoes Movimentacao[]
+  osProdutos OSProduto[]
 }
 
 model Movimentacao {
@@ -41,10 +43,14 @@ model Movimentacao {
 }
 
 model Gasto {
-  id        Int      @id @default(autoincrement())
-  descricao String
-  valor     Float
-  data      DateTime @default(now())
+  id          Int       @id @default(autoincrement())
+  descricao   String
+  valor       Float
+  tipo        String    @default("DESPESA") // DESPESA | RECEITA
+  categoria   String?
+  status      String    @default("PENDENTE") // PENDENTE | PAGO | RECEBIDO | CANCELADO
+  vencimento  DateTime?
+  data        DateTime  @default(now())
 }
 
 model Evento {
@@ -75,11 +81,46 @@ model Service {
   nome        String
   descricao   String?
   categoria   String?
-  valor       Decimal  @db.Decimal(10,2)
+  valor       Float
   garantia    Int?     // dias
   duracao     Int?     // minutos
   ativo       Boolean  @default(true)
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  osServicos OSServico[]
+}
+
+model OrdemServico {
+  id           Int       @id @default(autoincrement())
+  clienteId    Int
+  cliente      Cliente   @relation(fields: [clienteId], references: [id])
+  status       String    @default("ABERTA") // ABERTA | EM_ANDAMENTO | CONCLUIDA
+  observacoes  String?
+  valorTotal   Float     @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  servicos     OSServico[]
+  produtos     OSProduto[]
+}
+
+model OSServico {
+  id             Int          @id @default(autoincrement())
+  ordemServicoId Int
+  ordemServico   OrdemServico @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  serviceId      Int
+  service        Service      @relation(fields: [serviceId], references: [id])
+  valor          Float
+}
+
+model OSProduto {
+  id             Int          @id @default(autoincrement())
+  ordemServicoId Int
+  ordemServico   OrdemServico @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  produtoId      Int
+  produto        Produto      @relation(fields: [produtoId], references: [id])
+  quantidade     Int
+  precoUnitario  Float
 }

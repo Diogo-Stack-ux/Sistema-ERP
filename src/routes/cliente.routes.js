@@ -66,4 +66,69 @@ router.delete("/:id", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+router.get("/:id/perfil", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    const cliente = await prisma.cliente.findUnique({
+      where: {
+        id,
+      },
+      include: {
+        ordensServico: {
+          include: {
+            servicos: {
+              include: {
+                service: true,
+              },
+            },
+            produtos: {
+              include: {
+                produto: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+        },
+      },
+    });
+
+    if (!cliente) {
+      return res.status(404).json({
+        message: "Cliente não encontrado",
+      });
+    }
+
+    const totalServicos = cliente.ordensServico.length;
+
+    const totalGasto = cliente.ordensServico.reduce(
+      (total, os) => total + os.valorTotal,
+      0
+    );
+
+    const ultimaVisita =
+      cliente.ordensServico.length > 0
+        ? cliente.ordensServico[0].createdAt
+        : null;
+
+    res.json({
+      cliente,
+      estatisticas: {
+        totalServicos,
+        totalGasto,
+        ultimaVisita,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      error: error.message,
+    });
+  }
+});
+
 module.exports = router;

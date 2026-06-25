@@ -6,10 +6,14 @@ const prisma = require('../lib/prisma');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-const SECRET = "segredo_super_secreto";
+const SECRET = process.env.JWT_SECRET;
 
-const gerarToken = (usuario) =>
-  jwt.sign(
+const gerarToken = (usuario) => {
+  if (!SECRET) {
+    throw new Error("JWT_SECRET não configurado");
+  }
+
+  return jwt.sign(
     {
       id: usuario.id,
     },
@@ -18,6 +22,9 @@ const gerarToken = (usuario) =>
       expiresIn: "7d",
     }
   );
+};
+
+const sanitizeUsuario = ({ id, nome, email }) => ({ id, nome, email });
 
 // REGISTER
 router.post("/register", async (req, res) => {
@@ -25,6 +32,12 @@ router.post("/register", async (req, res) => {
   try {
 
     const { nome, email, senha } = req.body;
+
+    if (!nome || !email || !senha) {
+      return res.status(400).json({
+        error: "Nome, email e senha são obrigatórios",
+      });
+    }
 
     const usuarioExiste =
       await prisma.usuario.findUnique({
@@ -51,7 +64,7 @@ router.post("/register", async (req, res) => {
         },
       });
 
-    res.json(usuario);
+    res.json(sanitizeUsuario(usuario));
 
   } catch (error) {
 
@@ -69,6 +82,12 @@ router.post("/login", async (req, res) => {
   try {
 
     const { email, senha } = req.body;
+
+    if (!email || !senha) {
+      return res.status(400).json({
+        error: "Email e senha são obrigatórios",
+      });
+    }
 
     const usuario =
       await prisma.usuario.findUnique({
@@ -101,7 +120,7 @@ router.post("/login", async (req, res) => {
 
     res.json({
       token,
-      usuario,
+      usuario: sanitizeUsuario(usuario),
     });
 
   } catch (error) {
@@ -121,7 +140,7 @@ router.post("/google", async (req, res) => {
     const { credential } = req.body;
     const googleClientId = process.env.GOOGLE_CLIENT_ID;
 
-    if (!googleClientId) {
+    if (!googleClientId || googleClientId.includes("seu-client-id-do-google")) {
       return res.status(500).json({
         error: "Login com Google nao configurado",
       });
@@ -177,7 +196,7 @@ router.post("/google", async (req, res) => {
 
     res.json({
       token,
-      usuario,
+      usuario: sanitizeUsuario(usuario),
     });
 
   } catch (error) {

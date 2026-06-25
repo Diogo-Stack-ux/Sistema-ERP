@@ -7,34 +7,32 @@ router.use(auth);
 
 router.get("/", async (req, res) => {
   try {
-    // 👤 Clientes
-    const totalClientes = await prisma.cliente.count();
-
-    // 📦 Produtos
-    const totalProdutos = await prisma.produto.count();
-
-    // 📦 Soma do estoque
-    const estoque = await prisma.produto.aggregate({
-      _sum: {
-        quantidade: true,
-      },
-    });
-
-    // 💸 Gastos
-    const gastos = await prisma.gasto.aggregate({
-      _sum: {
-        valor: true,
-      },
-    });
-
-    // ⚠️ Estoque baixo
-    const estoqueBaixo = await prisma.produto.findMany({
-      where: {
-        quantidade: {
-          lte: 5,
-        },
-      },
-    });
+    const [totalClientes, totalProdutos, estoque, gastos, estoqueBaixo] =
+      await Promise.all([
+        prisma.cliente.count(),
+        prisma.produto.count(),
+        prisma.produto.aggregate({
+          _sum: {
+            quantidade: true,
+          },
+        }),
+        prisma.gasto.aggregate({
+          _sum: {
+            valor: true,
+          },
+        }),
+        prisma.produto.findMany({
+          where: {
+            quantidade: {
+              lte: 5,
+            },
+          },
+          orderBy: {
+            quantidade: "asc",
+          },
+          take: 10,
+        }),
+      ]);
 
     res.json({
       totalClientes,
@@ -43,12 +41,9 @@ router.get("/", async (req, res) => {
       totalGastos: gastos._sum.valor || 0,
       estoqueBaixo,
     });
-
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
-
-  
 });
 
 module.exports = router;

@@ -1,5 +1,9 @@
 node_modules
+*.log
+*.db
+*.db-journal
 # Keep environment variables out of version control
 .env
+.local-postgres/
 
 /src/generated/prisma

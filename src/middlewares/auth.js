@@ -1,8 +1,13 @@
 const jwt = require("jsonwebtoken");
 
-const SECRET = "segredo_super_secreto";
+const SECRET = process.env.JWT_SECRET;
 
 function auth(req, res, next) {
+  if (!SECRET) {
+    return res.status(500).json({
+      error: "JWT_SECRET não configurado",
+    });
+  }
 
   const authHeader =
     req.headers.authorization;
