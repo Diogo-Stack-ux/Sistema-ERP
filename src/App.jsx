@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -11,13 +11,27 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import api from "./services/api";
-import Services from "./pages/Services/Services";
+
+const Services = lazy(() => import("./pages/Services/Services"));
+const OrdensServico = lazy(() => import("./pages/OrdensServico/OrdensServico"));
+const Financeiro = lazy(() => import("./pages/Financeiro/Financeiro"));
+const ClientProfileModal = lazy(() => import("./components/ClientProfileModal"));
+
+function PageFallback() {
+  return (
+    <div className="mx-auto w-full max-w-5xl rounded-[1.25rem] glass-card p-5 text-sm text-slate-300 ring-1 ring-slate-200/10">
+      Carregando...
+    </div>
+  );
+}
 
 function App() {
   const [pagina, setPagina] = useState("dashboard");
   const [token, setToken] = useState(
     localStorage.getItem("token") || ""
   );
+  const [clientProfileOpen, setClientProfileOpen] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState(null);
 
   const [loginData, setLoginData] = useState({
     email: "",
@@ -25,7 +39,8 @@ function App() {
   });
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [loginErro, setLoginErro] = useState("");
-  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+  const googleClientIdRaw = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+  const googleClientId = googleClientIdRaw.includes("seu-client-id-do-google") ? "" : googleClientIdRaw;
 
   const fazerLogin = async () => {
     try {
@@ -44,7 +59,7 @@ function App() {
 
       setToken(response.data.token);
 
-      api.defaults.headers.Authorization =
+      api.defaults.headers.common.Authorization =
         `Bearer ${response.data.token}`;
     } catch (error) {
       console.error(error);
@@ -68,11 +83,14 @@ function App() {
 
       setToken(response.data.token);
 
-      api.defaults.headers.Authorization =
+      api.defaults.headers.common.Authorization =
         `Bearer ${response.data.token}`;
     } catch (error) {
       console.error(error);
-      setLoginErro("Nao foi possivel entrar com Google. Tente novamente.");
+      const mensagemErro =
+        error?.response?.data?.error ||
+        "Nao foi possivel entrar com Google. Tente novamente.";
+      setLoginErro(mensagemErro);
     }
   };
 
@@ -102,18 +120,23 @@ function App() {
       );
 
       setToken(loginResponse.data.token);
-      api.defaults.headers.Authorization =
+      api.defaults.headers.common.Authorization =
         `Bearer ${loginResponse.data.token}`;
     } catch (error) {
       console.error(error);
-      alert("Erro ao cadastrar. Verifique os dados e tente novamente.");
+      const mensagemErro =
+        error?.response?.data?.error ||
+        "Erro ao cadastrar. Verifique os dados e tente novamente.";
+      alert(mensagemErro);
     }
   };
 
   useEffect(() => {
     if (token) {
-      api.defaults.headers.Authorization =
+      api.defaults.headers.common.Authorization =
         `Bearer ${token}`;
+    } else {
+      delete api.defaults.headers.common.Authorization;
     }
   }, [token]);
 
@@ -193,11 +216,7 @@ function App() {
   const [tipo, setTipo] = useState("entrada");
   const [quantidadeMov, setQuantidadeMov] = useState(0);
 
-  const [gastosLista, setGastosLista] = useState([]);
   const [estoqueBaixo, setEstoqueBaixo] = useState([]);
-  const [descricao, setDescricao] = useState("");
-  const [valor, setValor] = useState("0");
-  const [categoriaGasto, setCategoriaGasto] = useState("");
   const [eventos, setEventos] = useState([]);
   const [filtroCalendario, setFiltroCalendario] = useState("todos");
   const [lembretes, setLembretes] = useState([]);
@@ -226,11 +245,6 @@ function App() {
   const buscarMovimentacoes = async () => {
     const res = await api.get("/movimentacoes");
     setMovimentacoes(res.data);
-  };
-
-  const buscarGastos = async () => {
-    const res = await api.get("/gastos");
-    setGastosLista(res.data);
   };
 
   const formatarEventos = (eventosLista) =>
@@ -398,15 +412,15 @@ function App() {
     }
   };
 
-  const deletarEvento = async () => {
+  const deletarEvento = async (eventoId) => {
     try {
-      const eventoId = eventoSelecionado?.id || novoEvento.id;
+      const idParaDeletar = eventoId || eventoSelecionado?.id || novoEvento.id;
 
-      if (!eventoId) {
+      if (!idParaDeletar) {
         return;
       }
 
-      await api.delete(`/eventos/${eventoId}`);
+      await api.delete(`/eventos/${idParaDeletar}`);
 
       buscarEventos();
 
@@ -426,6 +440,11 @@ function App() {
     setTelefone("");
     setEndereco("");
   };
+
+  function openClientProfile(cliente) {
+    setSelectedClientId(cliente.id);
+    setClientProfileOpen(true);
+  }
 
   const criarCliente = async () => {
     try {
@@ -521,24 +540,6 @@ function App() {
     buscarProdutos();
   };
 
-  const criarGasto = async () => {
-    try {
-      await api.post("/gastos", {
-        descricao,
-        valor: Number(valor),
-        categoria: categoriaGasto,
-      });
-
-      setDescricao("");
-      setValor("");
-      setCategoriaGasto("");
-
-      buscarGastos();
-    } catch (error) {
-      console.error("Erro ao cadastrar gasto:", error);
-    }
-  };
-
   const criarMovimentacao = async () => {
     if (!produtoId || !quantidadeMov || quantidadeMov <= 0) {
       alert("Selecione um produto e insira uma quantidade válida!");
@@ -561,12 +562,11 @@ function App() {
     }
   };
 
-  const deletarGasto = async (id) => {
-    await api.delete(`/gastos/${id}`);
-    buscarGastos();
-  };
-
   useEffect(() => {
+    if (!token) {
+      return;
+    }
+
     let cancelado = false;
 
     const carregarDadosIniciais = async () => {
@@ -576,14 +576,12 @@ function App() {
           clientesRes,
           produtosRes,
           movimentacoesRes,
-          gastosRes,
           eventosRes,
         ] = await Promise.all([
           api.get("/dashboard"),
           api.get("/clientes"),
           api.get("/produtos"),
           api.get("/movimentacoes"),
-          api.get("/gastos"),
           api.get("/eventos"),
         ]);
 
@@ -598,7 +596,6 @@ function App() {
         setClientes(clientesRes.data);
         setProdutos(produtosRes.data);
         setMovimentacoes(movimentacoesRes.data);
-        setGastosLista(gastosRes.data);
         setEventos(eventosFormatados);
         setLembretes(obterLembretes(eventosFormatados));
       } catch (error) {
@@ -611,9 +608,9 @@ function App() {
     return () => {
       cancelado = true;
     };
-  }, []);
+  }, [token]);
 
-  const eventosFiltrados = eventos.filter((evento) => {
+  const eventosFiltrados = useMemo(() => eventos.filter((evento) => {
     if (filtroCalendario === "todos") return true;
 
     if (filtroCalendario === "concluidos") {
@@ -625,24 +622,39 @@ function App() {
     }
 
     return evento.tipo === filtroCalendario;
-  });
+  }), [eventos, filtroCalendario]);
 
-  const produtosFiltrados = produtos.filter((p) => {
-    const codigoProduto = p.sku || p.codigo || p.code || p.SKU || "";
-    return (
-      p.nome?.toLowerCase().includes(buscaProduto.toLowerCase()) ||
-      p.tipo?.toLowerCase().includes(buscaProduto.toLowerCase()) ||
-      codigoProduto.toLowerCase().includes(buscaProduto.toLowerCase())
-    );
-  });
+  const produtosFiltradosOrdenados = useMemo(() => {
+    const termoBusca = buscaProduto.toLowerCase();
 
-  const produtosFiltradosOrdenados = [...produtosFiltrados].sort((a, b) => b.id - a.id);
+    return produtos
+      .filter((p) => {
+        const codigoProduto = p.sku || p.codigo || p.code || p.SKU || "";
+        return (
+          p.nome?.toLowerCase().includes(termoBusca) ||
+          p.tipo?.toLowerCase().includes(termoBusca) ||
+          codigoProduto.toLowerCase().includes(termoBusca)
+        );
+      })
+      .sort((a, b) => b.id - a.id);
+  }, [produtos, buscaProduto]);
 
   const botaoMenuClasse = (nomePagina) =>
-    `rounded-2xl px-5 py-4 text-left text-lg font-medium transition-all ${pagina === nomePagina
+    `shrink-0 rounded-xl px-3.5 py-2.5 text-left text-[13px] font-semibold transition-all lg:w-full ${pagina === nomePagina
       ? "bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-2xl shadow-fuchsia-500/20"
       : "text-slate-300 hover:bg-slate-800 hover:text-white"
     }`;
+
+  const menuItems = [
+    ["dashboard", "Dashboard"],
+    ["clientes", "Clientes"],
+    ["produtos", "Produtos"],
+    ["services", "Servicos"],
+    ["ordens-servico", "Ordens de Servico"],
+    ["movimentacoes", "Movimentacoes"],
+    ["financeiro", "Financeiro"],
+    ["calendario", "Calendario"],
+  ];
 
   if (!token) {
     return (
@@ -889,61 +901,39 @@ function App() {
   }
 
   return (
-    <div className="flex min-h-screen text-slate-100 app-shell">
-      <aside className="w-72 min-h-screen rounded-r-[2rem] px-6 py-8 text-white shadow-2xl sidebar-panel">
-        <div className="mb-7">
+    <div className="flex min-h-screen flex-col text-slate-100 app-shell lg:flex-row">
+      <aside className="w-full px-4 py-4 text-white shadow-2xl sidebar-panel lg:min-h-screen lg:w-72 lg:rounded-r-[2rem] lg:px-6 lg:py-8">
+        <div className="mb-4 lg:mb-7">
           <p className="mb-3 text-[11px] uppercase tracking-[0.35em] text-slate-400">
             Painel
           </p>
-          <h2 className="text-[1.8rem] font-black tracking-tight">Nuvix Organizer</h2>
-          <p className="mt-2.5 text-[13px] leading-6 text-slate-400">
+          <div className="flex items-center justify-between gap-3 lg:block">
+            <h2 className="text-xl font-black tracking-tight lg:text-[1.8rem]">Nuvix Organizer</h2>
+            <button
+              onClick={() => {
+                localStorage.removeItem("token");
+                setToken("");
+              }}
+              className="rounded-lg bg-red-500 px-3 py-2 text-xs font-semibold text-white hover:bg-red-600 lg:hidden"
+            >
+              Sair
+            </button>
+          </div>
+          <p className="mt-2.5 hidden text-[13px] leading-6 text-slate-400 lg:block">
             Gestao organizada e pronta para o dia a dia.
           </p>
         </div>
 
-        <nav className="flex flex-col gap-3">
-          <button
-            onClick={() => setPagina("dashboard")}
-            className={`${botaoMenuClasse("dashboard")} px-3.5 py-2.5 text-[13px]`}
-          >
-            Dashboard
-          </button>
-          <button
-            onClick={() => setPagina("clientes")}
-            className={`${botaoMenuClasse("clientes")} px-3.5 py-2.5 text-[13px]`}
-          >
-            Clientes
-          </button>
-          <button
-            onClick={() => setPagina("produtos")}
-            className={`${botaoMenuClasse("produtos")} px-3.5 py-2.5 text-[13px]`}
-          >
-            Produtos
-          </button>
-          <button
-            onClick={() => setPagina("services")}
-            className={`${botaoMenuClasse("services")} px-3.5 py-2.5 text-[13px]`}
-          >
-            Serviços
-          </button>
-          <button
-            onClick={() => setPagina("movimentacoes")}
-            className={`${botaoMenuClasse("movimentacoes")} px-3.5 py-2.5 text-[13px]`}
-          >
-            Movimentações
-          </button>
-          <button
-            onClick={() => setPagina("gastos")}
-            className={`${botaoMenuClasse("gastos")} px-3.5 py-2.5 text-[13px]`}
-          >
-            Gastos
-          </button>
-          <button
-            onClick={() => setPagina("calendario")}
-            className={`${botaoMenuClasse("calendario")} px-3.5 py-2.5 text-[13px]`}
-          >
-            Calendário
-          </button>
+        <nav className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-col lg:gap-3 lg:overflow-visible lg:px-0 lg:pb-0">
+          {menuItems.map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setPagina(key)}
+              className={botaoMenuClasse(key)}
+            >
+              {label}
+            </button>
+          ))}
         </nav>
 
         <button
@@ -951,21 +941,21 @@ function App() {
             localStorage.removeItem("token");
             setToken("");
           }}
-          className="text-left hover:bg-red-600 bg-red-500 p-2 rounded mt-10"
+          className="mt-10 hidden rounded bg-red-500 p-2 text-left hover:bg-red-600 lg:block"
         >
           Sair
         </button>
       </aside>
 
-      <main className="flex-1 px-3 py-5 md:px-4 lg:px-5">
-        <div className="w-full">
+      <main className="min-w-0 flex-1 px-3 py-4 md:px-4 lg:px-5">
+        <div className="w-full min-w-0">
           {pagina === "dashboard" && (
             <>
-              <div className="mb-7">
+              <div className="mb-5 sm:mb-7">
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
                   Painel principal
                 </p>
-                <h1 className="mt-2 text-4xl font-black tracking-tight text-white">
+                <h1 className="mt-2 text-3xl font-black tracking-tight text-white sm:text-4xl">
                   Dashboard
                 </h1>
                 <p className="mt-2 max-w-2xl text-base text-slate-300">
@@ -973,39 +963,39 @@ function App() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-[1.75rem] bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 p-6 text-white shadow-2xl shadow-fuchsia-500/20 ring-1 ring-white/10">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-[1.25rem] bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 p-4 text-white shadow-2xl shadow-fuchsia-500/20 ring-1 ring-white/10 sm:rounded-[1.75rem] sm:p-6">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-100/70">
                     Clientes
                   </p>
-                  <h2 className="mt-4 text-4xl font-black">{dados.totalClientes}</h2>
+                  <h2 className="mt-4 text-3xl font-black sm:text-4xl">{dados.totalClientes}</h2>
                   <p className="mt-3 text-sm text-slate-100/80">Total de clientes no sistema</p>
                 </div>
-                <div className="rounded-[1.75rem] bg-gradient-to-br from-sky-600 via-cyan-600 to-teal-500 p-6 text-white shadow-2xl shadow-cyan-500/20 ring-1 ring-white/10">
+                <div className="rounded-[1.25rem] bg-gradient-to-br from-sky-600 via-cyan-600 to-teal-500 p-4 text-white shadow-2xl shadow-cyan-500/20 ring-1 ring-white/10 sm:rounded-[1.75rem] sm:p-6">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-100/70">
                     Produtos
                   </p>
-                  <h2 className="mt-4 text-4xl font-black">{dados.totalProdutos}</h2>
+                  <h2 className="mt-4 text-3xl font-black sm:text-4xl">{dados.totalProdutos}</h2>
                   <p className="mt-3 text-sm text-slate-100/80">Produtos cadastrados</p>
                 </div>
-                <div className="rounded-[1.75rem] bg-gradient-to-br from-emerald-600 via-lime-600 to-amber-500 p-6 text-white shadow-2xl shadow-emerald-500/20 ring-1 ring-white/10">
+                <div className="rounded-[1.25rem] bg-gradient-to-br from-emerald-600 via-lime-600 to-amber-500 p-4 text-white shadow-2xl shadow-emerald-500/20 ring-1 ring-white/10 sm:rounded-[1.75rem] sm:p-6">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-100/70">
                     Estoque
                   </p>
-                  <h2 className="mt-4 text-4xl font-black">{dados.estoqueTotal}</h2>
+                  <h2 className="mt-4 text-3xl font-black sm:text-4xl">{dados.estoqueTotal}</h2>
                   <p className="mt-3 text-sm text-slate-100/80">Unidades em estoque</p>
                 </div>
-                <div className="rounded-[1.75rem] bg-gradient-to-br from-rose-500 via-pink-500 to-fuchsia-500 p-6 text-white shadow-2xl shadow-rose-500/20 ring-1 ring-white/10">
+                <div className="rounded-[1.25rem] bg-gradient-to-br from-rose-500 via-pink-500 to-fuchsia-500 p-4 text-white shadow-2xl shadow-rose-500/20 ring-1 ring-white/10 sm:rounded-[1.75rem] sm:p-6">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-100/70">
                     Gastos
                   </p>
-                  <h2 className="mt-4 text-4xl font-black">R$ {dados.totalGastos}</h2>
+                  <h2 className="mt-4 text-3xl font-black sm:text-4xl">R$ {dados.totalGastos}</h2>
                   <p className="mt-3 text-sm text-slate-100/80">Total gasto no período</p>
                 </div>
               </div>
 
-              <div className="grid gap-6 xl:grid-cols-[0.7fr_0.3fr]">
-                <div className="glass-card p-6 rounded-[2rem] ring-1 ring-slate-200/10">
+              <div className="grid gap-4 sm:gap-6 xl:grid-cols-[0.7fr_0.3fr]">
+                <div className="glass-card rounded-[1.25rem] p-4 ring-1 ring-slate-200/10 sm:rounded-[2rem] sm:p-6">
                   <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.32em] text-slate-400">
@@ -1020,8 +1010,8 @@ function App() {
                     </span>
                   </div>
 
-                  <div style={{ width: "100%", minWidth: 0, minHeight: 0, height: 340 }}>
-                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                  <div style={{ width: "100%", minWidth: 0 }}>
+                    <ResponsiveContainer width="100%" height={260} minWidth={0}>
                       <BarChart data={dadosGrafico}>
                         <XAxis dataKey="mes" stroke="#94a3b8" />
                         <YAxis stroke="#94a3b8" />
@@ -1033,7 +1023,7 @@ function App() {
                 </div>
 
                 <div className="space-y-6">
-                  <div className="glass-card p-6 rounded-[2rem] ring-1 ring-slate-200/10">
+                  <div className="glass-card rounded-[1.25rem] p-4 ring-1 ring-slate-200/10 sm:rounded-[2rem] sm:p-6">
                     <h2 className="text-xl font-bold mb-4 text-slate-100">
                       Próximos Eventos
                     </h2>
@@ -1054,7 +1044,7 @@ function App() {
                     </div>
                   </div>
 
-                  <div className="glass-card p-6 rounded-[2rem] ring-1 ring-slate-200/10">
+                  <div className="glass-card rounded-[1.25rem] p-4 ring-1 ring-slate-200/10 sm:rounded-[2rem] sm:p-6">
                     <h2 className="text-xl font-bold mb-4 text-slate-100">
                       ⚠ Estoque Baixo
                     </h2>
@@ -1081,7 +1071,17 @@ function App() {
             </>
           )}
 
-          {pagina === "services" && <Services />}
+          {pagina === "services" && (
+            <Suspense fallback={<PageFallback />}>
+              <Services />
+            </Suspense>
+          )}
+
+          {pagina === "ordens-servico" && (
+            <Suspense fallback={<PageFallback />}>
+              <OrdensServico />
+            </Suspense>
+          )}
 
           {pagina === "clientes" && (
             <section>
@@ -1107,7 +1107,7 @@ function App() {
                 </div>
               </div>
 
-              <div className="mx-auto w-full max-w-5xl rounded-[1.5rem] glass-card p-5 ring-1 ring-slate-200/10 md:p-5">
+              <div className="mx-auto w-full max-w-5xl rounded-[1.25rem] glass-card p-4 ring-1 ring-slate-200/10 sm:p-5">
                 <div className="grid grid-cols-1 gap-2 xl:grid-cols-[0.7fr_0.85fr_0.62fr_0.72fr_auto]">
                   <input
                     className="h-9 rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-[11px] text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
@@ -1137,7 +1137,7 @@ function App() {
                   <div className="flex flex-col gap-2 sm:flex-row xl:flex-col">
                     <button
                       onClick={editandoId ? atualizarCliente : criarCliente}
-                      className="bg-black text-white px-4 rounded"
+                    className="h-10 rounded-lg bg-black px-4 text-sm font-semibold text-white"
                     >
                       {editandoId ? "Atualizar" : "Adicionar"}
                     </button>
@@ -1145,7 +1145,7 @@ function App() {
                     {editandoId && (
                       <button
                         onClick={limparFormulario}
-                        className="border border-gray-300 text-gray-700 px-4 rounded"
+                        className="h-10 rounded-lg border border-gray-300 px-4 text-sm font-semibold text-gray-700"
                       >
                         Cancelar
                       </button>
@@ -1201,6 +1201,12 @@ function App() {
 
                         <div className="flex gap-1 md:justify-center">
                           <button
+                            onClick={() => openClientProfile(c)}
+                            className="rounded-md bg-blue-600 px-2 py-1 text-[10px] font-semibold text-white transition hover:bg-blue-700"
+                          >
+                            Ver
+                          </button>
+                          <button
                             onClick={() => {
                               setEditandoId(c.id);
                               setNome(c.nome);
@@ -1228,7 +1234,7 @@ function App() {
           )}
 
           {pagina === "produtos" && (
-            <div className="mx-auto w-full max-w-5xl rounded-[1.5rem] glass-card p-5 ring-1 ring-slate-200/10">
+            <div className="mx-auto w-full max-w-5xl rounded-[1.25rem] glass-card p-4 ring-1 ring-slate-200/10 sm:p-5">
               <div className="mb-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">Estoque</p>
                 <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-100">Produtos</h1>
@@ -1307,8 +1313,8 @@ function App() {
               </div>
 
               {/* LISTA */}
-              <div className="bg-slate-950/40 p-4 rounded-3xl">
-                {produtosFiltrados.length === 0 ? (
+              <div className="rounded-2xl bg-slate-950/40 p-3 sm:rounded-3xl sm:p-4">
+                {produtosFiltradosOrdenados.length === 0 ? (
                   <p className="text-slate-400">Nenhum produto encontrado.</p>
                 ) : (
                   produtosFiltradosOrdenados.map((p) => {
@@ -1355,7 +1361,7 @@ function App() {
                             </span>
                           </div>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="grid grid-cols-2 gap-2 sm:flex">
                           <button
                             onClick={() => {
                               setEditandoProdutoId(p.id);
@@ -1384,7 +1390,7 @@ function App() {
             </div>
           )}
           {pagina === "movimentacoes" && (
-            <div className="mx-auto w-full max-w-5xl rounded-[1.5rem] glass-card p-5 ring-1 ring-slate-200/10">
+            <div className="mx-auto w-full max-w-5xl rounded-[1.25rem] glass-card p-4 ring-1 ring-slate-200/10 sm:p-5">
               <div className="mb-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
                   Movimentações
@@ -1438,7 +1444,7 @@ function App() {
               </div>
 
               {/* LISTA */}
-              <div className="bg-slate-950/40 p-4 rounded-3xl">
+              <div className="rounded-2xl bg-slate-950/40 p-3 sm:rounded-3xl sm:p-4">
                 {movimentacoes.length === 0 ? (
                   <p className="text-slate-400">Nenhuma movimentação cadastrada</p>
                 ) : (
@@ -1468,97 +1474,13 @@ function App() {
               </div>
             </div>
           )}
-          {pagina === "gastos" && (
-            <div className="mx-auto w-full max-w-5xl rounded-[1.5rem] glass-card p-5 ring-1 ring-slate-200/10">
-              <div className="mb-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">Finanças</p>
-                <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-100">Gastos</h1>
-                <p className="mt-1 text-sm text-slate-400">Registre e controle seus gastos em um único lugar.</p>
-              </div>
-
-              {/* FORM */}
-              <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[1.3fr_0.7fr_0.9fr_auto]">
-                <input
-                  className="min-w-0 border border-slate-200 bg-slate-50 px-3 py-2 rounded-lg text-sm text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
-                  placeholder="Descrição"
-                  value={descricao}
-                  onChange={(e) => setDescricao(e.target.value)}
-                />
-
-                <input
-                  className="min-w-0 border border-slate-200 bg-slate-50 px-3 py-2 rounded-lg text-sm text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
-                  placeholder="Valor"
-                  value={valor}
-                  onChange={(e) => setValor(e.target.value)}
-                />
-
-                <select
-                  className="min-w-0 border border-slate-200 bg-slate-50 px-3 py-2 rounded-lg text-sm text-slate-700 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
-                  value={categoriaGasto}
-                  onChange={(e) => setCategoriaGasto(e.target.value)}
-                >
-                  <option value="">Categoria</option>
-                  <option value="Alimentação">Alimentação</option>
-                  <option value="Transporte">Transporte</option>
-                  <option value="Moradia">Moradia</option>
-                  <option value="Saúde">Saúde</option>
-                  <option value="Educação">Educação</option>
-                  <option value="Tecnologia">Tecnologia</option>
-                  <option value="Marketing">Marketing</option>
-                  <option value="Outros">Outros</option>
-                </select>
-
-                <button
-                  onClick={criarGasto}
-                  className="w-full rounded-lg bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 px-4 py-2 text-white transition hover:opacity-90 sm:w-auto sm:min-w-[8rem]"
-                >
-                  Adicionar
-                </button>
-              </div>
-
-              {/* LISTA */}
-              <div className="bg-slate-950/40 p-4 rounded-3xl">
-                {gastosLista.length === 0 ? (
-                  <p className="text-slate-400">Nenhum gasto cadastrado</p>
-                ) : (
-                  gastosLista.map((g) => (
-                    <div
-                      key={g.id}
-                      className="flex flex-col gap-3 border-b border-slate-700 py-4 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div>
-                        <p className="font-semibold text-slate-100">{g.descricao}</p>
-                        <span className="mt-1 inline-block rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] font-semibold text-violet-300">
-                          {g.categoria || "Outros"}
-                        </span>
-                        <p className="mt-2 text-sm text-slate-400">
-                          R$ {Number(g.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </p>
-                      </div>
-
-                      <button
-                        onClick={() => deletarGasto(g.id)}
-                        className="rounded-md bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-400 hover:bg-red-500/20 transition"
-                      >
-                        Excluir
-                      </button>
-                    </div>
-                  ))
-                )}
-
-                {gastosLista.length > 0 && (
-                  <div className="mt-4 border-t border-slate-700 pt-4 flex justify-between items-center">
-                    <span className="text-sm text-slate-400">Total</span>
-                    <span className="text-lg font-black text-slate-100">
-                      R$ {gastosLista.reduce((acc, g) => acc + Number(g.valor), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
+          {pagina === "financeiro" && (
+            <Suspense fallback={<PageFallback />}>
+              <Financeiro />
+            </Suspense>
           )}
           {pagina === "calendario" && (
-            <div className="mx-auto w-full max-w-5xl rounded-[1.5rem] glass-card p-5 text-left ring-1 ring-slate-200/10">
+            <div className="mx-auto w-full max-w-5xl rounded-[1.25rem] glass-card p-4 text-left ring-1 ring-slate-200/10 sm:p-5">
               <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
@@ -1663,8 +1585,8 @@ function App() {
               </div>
 
               {mostrarModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 backdrop-blur-sm">
-                  <div className="w-full max-w-md rounded-2xl bg-slate-950/95 p-6 text-left shadow-2xl ring-1 ring-slate-200/10">
+                <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/70 px-4 py-6 backdrop-blur-sm sm:items-center">
+                  <div className="w-full max-w-md rounded-2xl bg-slate-950/95 p-5 text-left shadow-2xl ring-1 ring-slate-200/10 sm:p-6">
                     <div className="mb-5">
                       <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
                         Agenda
@@ -1734,7 +1656,7 @@ function App() {
                       </label>
                     </div>
 
-                    <div className="mt-6 flex justify-between gap-2">
+                    <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-between">
                       <div>
                         {modoEdicao && (
                           <button
@@ -1746,7 +1668,7 @@ function App() {
                         )}
                       </div>
 
-                      <div className="flex gap-2">
+                      <div className="flex flex-col-reverse gap-2 sm:flex-row">
                         {modoEdicao && !novoEvento.concluido && (
                           <button
                             onClick={concluirEvento}
@@ -1779,8 +1701,8 @@ function App() {
               )}
 
               {eventoSelecionado && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 backdrop-blur-sm">
-                  <div className="w-full max-w-md rounded-2xl bg-slate-950/95 p-6 text-left shadow-2xl ring-1 ring-slate-200/10">
+                <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/70 px-4 py-6 backdrop-blur-sm sm:items-center">
+                  <div className="w-full max-w-md rounded-2xl bg-slate-950/95 p-5 text-left shadow-2xl ring-1 ring-slate-200/10 sm:p-6">
                     <div className="mb-5">
                       <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
                         Evento
@@ -1814,6 +1736,16 @@ function App() {
                 </div>
               )}
             </div>
+          )}
+
+          {clientProfileOpen && (
+            <Suspense fallback={null}>
+              <ClientProfileModal
+                isOpen={clientProfileOpen}
+                clientId={selectedClientId}
+                onClose={() => setClientProfileOpen(false)}
+              />
+            </Suspense>
           )}
 
         </div>

@@ -59,9 +59,25 @@
 body {
   margin: 0;
   min-height: 100vh;
+  overflow-x: hidden;
   background: radial-gradient(circle at top left, rgba(99, 102, 241, 0.18), transparent 24%),
     linear-gradient(180deg, #0f172a 0%, #020617 100%);
   color: #e2e8f0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  min-height: 40px;
 }
 
 #root {
@@ -245,6 +261,14 @@ code {
 }
 
 @media (max-width: 768px) {
+  .calendario-card {
+    overflow-x: auto;
+  }
+
+  .calendario-card .fc {
+    min-width: 620px;
+  }
+
   .calendario-card .fc .fc-toolbar {
     align-items: stretch;
     flex-direction: column;

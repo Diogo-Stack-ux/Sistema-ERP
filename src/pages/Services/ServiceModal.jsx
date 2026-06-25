@@ -1,76 +1,80 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { createService } from "../../services/serviceApi";
+import { createService, updateService } from "../../services/serviceApi";
 
-function ServiceModal({ isOpen, onClose, onSuccess }) {
-  const [formData, setFormData] = useState({
-    nome: "",
-    descricao: "",
-    categoria: "",
-    valor: "",
-    garantia: "",
-    duracao: "",
-    ativo: true,
-  });
+const EMPTY_FORM = {
+  nome: "",
+  descricao: "",
+  categoria: "",
+  valor: "",
+  garantia: "",
+  duracao: "",
+  ativo: true,
+};
 
+function ServiceModal({ isOpen, onClose, onSuccess, service }) {
+  const isEditing = Boolean(service);
+  const [formData, setFormData] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (service) {
+      setFormData({
+        nome: service.nome || "",
+        descricao: service.descricao || "",
+        categoria: service.categoria || "",
+        valor: service.valor ?? "",
+        garantia: service.garantia ?? "",
+        duracao: service.duracao ?? "",
+        ativo: service.ativo ?? true,
+      });
+    } else {
+      setFormData(EMPTY_FORM);
+    }
+  }, [service]);
 
   function handleChange(e) {
     const { name, value, type, checked } = e.target;
-
     setFormData((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
     }));
   }
 
-  function resetForm() {
-    setFormData({
-      nome: "",
-      descricao: "",
-      categoria: "",
-      valor: "",
-      garantia: "",
-      duracao: "",
-      ativo: true,
-    });
-  }
-
   function handleClose() {
-    if (loading) {
-      return;
-    }
-
+    if (loading) return;
     onClose();
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
-
     try {
       setLoading(true);
 
-      await createService({
+      const payload = {
         ...formData,
         valor: Number(formData.valor),
         garantia: formData.garantia ? Number(formData.garantia) : null,
         duracao: formData.duracao ? Number(formData.duracao) : null,
-      });
+      };
+
+      if (isEditing) {
+        await updateService(service.id, payload);
+      } else {
+        await createService(payload);
+      }
 
       await onSuccess();
-      resetForm();
       onClose();
     } catch (error) {
       console.error(error);
-      alert("Erro ao cadastrar serviço");
+      alert(isEditing ? "Erro ao editar serviço" : "Erro ao cadastrar serviço");
     } finally {
       setLoading(false);
     }
   }
 
-  if (!isOpen) {
-    return null;
-  }
+  if (!isOpen) return null;
 
   const inputClass =
     "h-11 w-full rounded-lg border border-slate-700 bg-slate-950/80 px-3 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20";
@@ -86,10 +90,12 @@ function ServiceModal({ isOpen, onClose, onSuccess }) {
               Serviços
             </p>
             <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-100">
-              Novo Serviço
+              {isEditing ? "Editar Serviço" : "Novo Serviço"}
             </h2>
             <p className="mt-1 text-sm text-slate-400">
-              Preencha os dados para cadastrar um novo serviço.
+              {isEditing
+                ? "Altere os dados e salve para atualizar."
+                : "Preencha os dados para cadastrar um novo serviço."}
             </p>
           </div>
 
@@ -208,7 +214,7 @@ function ServiceModal({ isOpen, onClose, onSuccess }) {
               disabled={loading}
               className="rounded-lg bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loading ? "Salvando..." : "Salvar"}
+              {loading ? "Salvando..." : isEditing ? "Salvar alterações" : "Salvar"}
             </button>
           </div>
         </form>
