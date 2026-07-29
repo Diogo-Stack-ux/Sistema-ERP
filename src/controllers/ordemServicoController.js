@@ -3,51 +3,74 @@ const ordemServicoService = require("../services/ordemServicoService");
 async function index(req, res) {
   try {
     const ordens = await ordemServicoService.listOrdens();
-    res.json(ordens);
+    return res.json(ordens);
   } catch (error) {
-    res.status(500).json({ error: "Erro ao listar ordens de serviço" });
+    console.error("Erro ao listar ordens de servico:", error);
+    return res.status(error.statusCode || 500).json({
+      error: error.message || "Erro ao listar ordens de servico",
+    });
   }
 }
 
 async function show(req, res) {
   try {
     const ordem = await ordemServicoService.getOrdemById(req.params.id);
+
     if (!ordem) {
-      return res.status(404).json({ error: "Ordem de serviço não encontrada" });
+      return res.status(404).json({
+        error: "Ordem de servico nao encontrada",
+      });
     }
-    res.json(ordem);
+
+    return res.json(ordem);
   } catch (error) {
-    res.status(500).json({ error: "Erro ao buscar ordem de serviço" });
+    console.error("Erro ao buscar ordem de servico:", error);
+    return res.status(error.statusCode || 500).json({
+      error: error.message || "Erro ao buscar ordem de servico",
+    });
   }
 }
 
 async function create(req, res) {
   try {
     const ordem = await ordemServicoService.createOrdem(req.body);
-    res.status(201).json(ordem);
+    return res.status(201).json(ordem);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Erro ao criar ordem de serviço" });
+    console.error("Erro ao criar ordem de servico:", error);
+    return res.status(error.statusCode || 500).json({
+      error: error.message || "Erro ao criar ordem de servico",
+    });
   }
 }
 
 async function updateStatus(req, res) {
   try {
     const { status } = req.body;
-    const ordem = await ordemServicoService.updateStatus(req.params.id, status);
-    res.json(ordem);
+
+    const ordem = await ordemServicoService.updateStatus(
+      req.params.id,
+      status
+    );
+
+    return res.json(ordem);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Erro ao atualizar status" });
+    console.error("Erro ao atualizar status:", error);
+
+    return res.status(error.statusCode || 500).json({
+      error: error.message || "Erro ao atualizar status",
+    });
   }
 }
 
 async function destroy(req, res) {
   try {
     await ordemServicoService.deleteOrdem(req.params.id);
-    res.status(204).send();
+    return res.status(204).send();
   } catch (error) {
-    res.status(500).json({ error: "Erro ao excluir ordem de serviço" });
+    console.error("Erro ao excluir ordem de servico:", error);
+    return res.status(error.statusCode || 500).json({
+      error: error.message || "Erro ao excluir ordem de servico",
+    });
   }
 }
 

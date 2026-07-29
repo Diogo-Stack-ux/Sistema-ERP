@@ -15,95 +15,98 @@ model Cliente {
   endereco  String
   createdAt DateTime @default(now())
 
-  eventos         Evento[]
-  ordensServico   OrdemServico[]
+  eventos       Evento[]
+  ordensServico OrdemServico[]
+  equipamentos  Equipamento[]
 }
 
 model Produto {
-  id        Int      @id @default(autoincrement())
-  nome      String
-  sku       String?  @unique
+  id         Int      @id @default(autoincrement())
+  nome       String
+  sku        String?  @unique
   quantidade Int
-  preco     Float
-  tipo      String
-  createdAt DateTime @default(now())
+  preco      Float
+  tipo       String
+  createdAt  DateTime @default(now())
 
   movimentacoes Movimentacao[]
-  osProdutos OSProduto[]
+  osProdutos    OSProduto[]
 }
 
 model Movimentacao {
-  id        Int      @id @default(autoincrement())
-  produtoId Int
-  tipo      String
+  id         Int      @id @default(autoincrement())
+  produtoId  Int
+  tipo       String
   quantidade Int
-  data      DateTime @default(now())
+  data       DateTime @default(now())
 
   produto Produto @relation(fields: [produtoId], references: [id])
 }
 
 model Gasto {
-  id          Int       @id @default(autoincrement())
-  descricao   String
-  valor       Float
-  tipo        String    @default("DESPESA") // DESPESA | RECEITA
-  categoria   String?
-  status      String    @default("PENDENTE") // PENDENTE | PAGO | RECEBIDO | CANCELADO
-  vencimento  DateTime?
-  data        DateTime  @default(now())
+  id         Int       @id @default(autoincrement())
+  descricao  String
+  valor      Float
+  tipo       String    @default("DESPESA") // DESPESA | RECEITA
+  categoria  String?
+  status     String    @default("PENDENTE") // PENDENTE | PAGO | RECEBIDO | CANCELADO
+  vencimento DateTime?
+  data       DateTime  @default(now())
 }
 
 model Evento {
-  id          Int       @id @default(autoincrement())
-  titulo      String
-  descricao   String?
-  tipo        String
-  data        DateTime
-  concluido   Boolean   @default(false)
+  id        Int      @id @default(autoincrement())
+  titulo    String
+  descricao String?
+  tipo      String
+  data      DateTime
+  concluido Boolean  @default(false)
 
-  clienteId   Int?
-  cliente     Cliente? @relation(fields: [clienteId], references: [id])
+  clienteId Int?
+  cliente   Cliente? @relation(fields: [clienteId], references: [id])
 
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 model Usuario {
-  id        Int      @id @default(autoincrement())
-  nome      String
-  email     String   @unique
-  senha     String
+  id    Int    @id @default(autoincrement())
+  nome  String
+  email String @unique
+  senha String
 
   createdAt DateTime @default(now())
 }
 
 model Service {
-  id          Int      @id @default(autoincrement())
-  nome        String
-  descricao   String?
-  categoria   String?
-  valor       Float
-  garantia    Int?     // dias
-  duracao     Int?     // minutos
-  ativo       Boolean  @default(true)
+  id        Int     @id @default(autoincrement())
+  nome      String
+  descricao String?
+  categoria String?
+  valor     Float
+  garantia  Int? // dias
+  duracao   Int? // minutos
+  ativo     Boolean @default(true)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   osServicos OSServico[]
 }
 
 model OrdemServico {
-  id           Int       @id @default(autoincrement())
-  clienteId    Int
-  cliente      Cliente   @relation(fields: [clienteId], references: [id])
-  status       String    @default("ABERTA") // ABERTA | EM_ANDAMENTO | CONCLUIDA
-  observacoes  String?
-  valorTotal   Float     @default(0)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id          Int      @id @default(autoincrement())
+  clienteId   Int
+  cliente     Cliente  @relation(fields: [clienteId], references: [id])
+  status      String   @default("ABERTA") // ABERTA | EM_ANDAMENTO | CONCLUIDA
+  observacoes String?
+  valorTotal  Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  servicos     OSServico[]
-  produtos     OSProduto[]
+  servicos      OSServico[]
+  produtos      OSProduto[]
+  equipamento   Equipamento? @relation(fields: [equipamentoId], references: [id])
+  equipamentoId Int?
 }
 
 model OSServico {
@@ -123,4 +126,26 @@ model OSProduto {
   produto        Produto      @relation(fields: [produtoId], references: [id])
   quantidade     Int
   precoUnitario  Float
+}
+
+model Equipamento {
+  id            Int       @id @default(autoincrement())
+  clienteId     Int
+  nome          String
+  tipo          String?
+  marca         String?
+  modelo        String?
+  numeroSerie   String?
+  identificacao String?
+  dataCompra    DateTime?
+  garantiaAte   DateTime?
+  observacoes   String?
+  ativo         Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  cliente       Cliente        @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  ordensServico OrdemServico[]
+
+  @@index([clienteId])
 }

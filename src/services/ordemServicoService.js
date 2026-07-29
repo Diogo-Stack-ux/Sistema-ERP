@@ -1,83 +1,290 @@
 const prisma = require("../lib/prisma");
 
-async function listOrdens() {
-  return prisma.ordemServico.findMany({
+const ordemInclude = {
+  cliente: true,
+  equipamento: true,
+  servicos: {
     include: {
-      cliente: true,
-      servicos: { include: { service: true } },
-      produtos: { include: { produto: true } },
+      service: true,
     },
-    orderBy: { createdAt: "desc" },
+  },
+  produtos: {
+    include: {
+      produto: true,
+    },
+  },
+};
+
+function normalizeOrdem(ordem) {
+  if (!ordem) return ordem;
+
+  return ordem;
+}
+
+function createHttpError(message, statusCode = 400) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+function parsePositiveId(value, fieldName) {
+  const numberValue = Number(value);
+
+  if (!Number.isInteger(numberValue) || numberValue <= 0) {
+    throw createHttpError(`${fieldName} invalido`);
+  }
+
+  return numberValue;
+}
+
+function parsePositiveNumber(value, fieldName) {
+  const numberValue = Number(value);
+
+  if (!Number.isFinite(numberValue) || numberValue <= 0) {
+    throw createHttpError(`${fieldName} invalido`);
+  }
+
+  return numberValue;
+}
+
+async function listOrdens() {
+  const ordens = await prisma.ordemServico.findMany({
+    include: ordemInclude,
+    orderBy: {
+      createdAt: "desc",
+    },
   });
+
+  return ordens.map(normalizeOrdem);
 }
 
 async function getOrdemById(id) {
-  return prisma.ordemServico.findUnique({
-    where: { id: Number(id) },
-    include: {
-      cliente: true,
-      servicos: { include: { service: true } },
-      produtos: { include: { produto: true } },
+  const ordem = await prisma.ordemServico.findUnique({
+    where: {
+      id: Number(id),
     },
+    include: ordemInclude,
   });
+
+  return normalizeOrdem(ordem);
 }
 
 async function createOrdem(data) {
-  const { clienteId, observacoes, servicos = [], produtos = [] } = data;
+  const {
+    clienteId,
+    equipamentoId,
+    observacoes,
+    servicos = [],
+    produtos = [],
+  } = data || {};
 
-  // Calcula valor total (serviços + produtos)
-  const totalServicos = servicos.reduce((sum, s) => sum + Number(s.valor), 0);
-  const totalProdutos = produtos.reduce(
-    (sum, p) => sum + Number(p.precoUnitario) * Number(p.quantidade),
+  const clienteIdNumber = parsePositiveId(clienteId, "Cliente");
+
+  const cliente = await prisma.cliente.findUnique({
+    where: {
+      id: clienteIdNumber,
+    },
+  });
+
+  if (!cliente) {
+    throw createHttpError("Cliente nao encontrado", 404);
+  }
+
+  let equipamentoIdNumber = null;
+
+  if (equipamentoId !== null && equipamentoId !== undefined && equipamentoId !== "") {
+    equipamentoIdNumber = parsePositiveId(equipamentoId, "Equipamento");
+
+    const equipamento = await prisma.equipamento.findUnique({
+      where: {
+        id: equipamentoIdNumber,
+      },
+    });
+
+    if (!equipamento) {
+      throw createHttpError("Equipamento nao encontrado", 404);
+    }
+
+    if (equipamento.clienteId !== clienteIdNumber) {
+      throw createHttpError(
+        "O equipamento nao pertence ao cliente selecionado"
+      );
+    }
+
+    if (!equipamento.ativo) {
+      throw createHttpError("Nao e possivel vincular um equipamento inativo");
+    }
+  }
+
+  if (!Array.isArray(servicos) || servicos.length === 0) {
+    throw createHttpError("Selecione pelo menos um servico");
+  }
+
+  if (!Array.isArray(produtos)) {
+    throw createHttpError("Lista de produtos invalida");
+  }
+
+  const servicosNormalizados = servicos.map((item) => ({
+    serviceId: parsePositiveId(item?.serviceId, "Servico"),
+    valor: parsePositiveNumber(item?.valor, "Valor do servico"),
+  }));
+
+  const produtosNormalizados = produtos.map((item) => ({
+    produtoId: parsePositiveId(item?.produtoId, "Produto"),
+    quantidade: parsePositiveId(item?.quantidade, "Quantidade do produto"),
+    precoUnitario: parsePositiveNumber(
+      item?.precoUnitario,
+      "Preco unitario do produto"
+    ),
+  }));
+
+  const servicosEncontrados = await prisma.service.findMany({
+    where: {
+      id: {
+        in: servicosNormalizados.map((item) => item.serviceId),
+      },
+    },
+  });
+
+  if (servicosEncontrados.length !== servicosNormalizados.length) {
+    throw createHttpError(
+      "Um ou mais servicos selecionados nao foram encontrados",
+      404
+    );
+  }
+
+  const servicoInativo = servicosEncontrados.find((service) => !service.ativo);
+
+  if (servicoInativo) {
+    throw createHttpError(`O servico "${servicoInativo.nome}" esta inativo`);
+  }
+
+  if (produtosNormalizados.length > 0) {
+    const produtosEncontrados = await prisma.produto.findMany({
+      where: {
+        id: {
+          in: produtosNormalizados.map((item) => item.produtoId),
+        },
+      },
+    });
+
+    if (produtosEncontrados.length !== produtosNormalizados.length) {
+      throw createHttpError(
+        "Um ou mais produtos selecionados nao foram encontrados",
+        404
+      );
+    }
+
+    for (const item of produtosNormalizados) {
+      const produto = produtosEncontrados.find(
+        (produtoEncontrado) => produtoEncontrado.id === item.produtoId
+      );
+
+      if (produto.quantidade < item.quantidade) {
+        throw createHttpError(
+          `Estoque insuficiente para o produto ${produto.nome}`
+        );
+      }
+    }
+  }
+
+  const totalServicos = servicosNormalizados.reduce(
+    (total, item) => total + item.valor,
     0
   );
 
-  return prisma.ordemServico.create({
+  const totalProdutos = produtosNormalizados.reduce(
+    (total, item) => total + item.precoUnitario * item.quantidade,
+    0
+  );
+
+  const observacoesNormalizadas =
+    typeof observacoes === "string" ? observacoes.trim() || null : null;
+
+  const ordem = await prisma.ordemServico.create({
     data: {
-      clienteId: Number(clienteId),
-      observacoes,
+      clienteId: clienteIdNumber,
+      equipamentoId: equipamentoIdNumber,
+      observacoes: observacoesNormalizadas,
       status: "ABERTA",
       valorTotal: totalServicos + totalProdutos,
+
       servicos: {
-        create: servicos.map((s) => ({
-          serviceId: Number(s.serviceId),
-          valor: Number(s.valor),
+        create: servicosNormalizados.map((item) => ({
+          serviceId: item.serviceId,
+          valor: item.valor,
         })),
       },
+
       produtos: {
-        create: produtos.map((p) => ({
-          produtoId: Number(p.produtoId),
-          quantidade: Number(p.quantidade),
-          precoUnitario: Number(p.precoUnitario),
+        create: produtosNormalizados.map((item) => ({
+          produtoId: item.produtoId,
+          quantidade: item.quantidade,
+          precoUnitario: item.precoUnitario,
         })),
       },
     },
-    include: {
-      cliente: true,
-      servicos: { include: { service: true } },
-      produtos: { include: { produto: true } },
-    },
+    include: ordemInclude,
   });
+
+  return normalizeOrdem(ordem);
 }
 
 async function updateStatus(id, status) {
+  const ordemId = parsePositiveId(id, "Ordem de servico");
+
+  const statusPermitidos = [
+    "ABERTA",
+    "EM_ANDAMENTO",
+    "CONCLUIDA",
+    "CANCELADA",
+  ];
+
+  if (!statusPermitidos.includes(status)) {
+    throw createHttpError("Status invalido");
+  }
+
   const ordem = await prisma.ordemServico.findUnique({
-    where: { id: Number(id) },
-    include: { produtos: true },
+    where: {
+      id: ordemId,
+    },
+    include: {
+      produtos: true,
+    },
   });
 
   if (!ordem) {
-    throw new Error("Ordem de serviço não encontrada");
+    throw createHttpError("Ordem de servico nao encontrada", 404);
   }
 
-  // Ao concluir: dá baixa no estoque e gera lançamento financeiro
   if (status === "CONCLUIDA" && ordem.status !== "CONCLUIDA") {
     await prisma.$transaction(async (tx) => {
-      // Baixa de estoque + movimentação
       for (const item of ordem.produtos) {
+        const produto = await tx.produto.findUnique({
+          where: {
+            id: item.produtoId,
+          },
+        });
+
+        if (!produto) {
+          throw createHttpError(`Produto ${item.produtoId} nao encontrado`, 404);
+        }
+
+        if (produto.quantidade < item.quantidade) {
+          throw createHttpError(
+            `Estoque insuficiente para o produto ${produto.nome}`
+          );
+        }
+
         await tx.produto.update({
-          where: { id: item.produtoId },
-          data: { quantidade: { decrement: item.quantidade } },
+          where: {
+            id: item.produtoId,
+          },
+          data: {
+            quantidade: {
+              decrement: item.quantidade,
+            },
+          },
         });
 
         await tx.movimentacao.create({
@@ -90,37 +297,65 @@ async function updateStatus(id, status) {
         });
       }
 
-      // Lançamento financeiro (receita da OS)
       await tx.gasto.create({
         data: {
           descricao: `Receita OS #${ordem.id}`,
-          valor: -Number(ordem.valorTotal), // negativo = entrada, ajuste conforme sua regra
+          valor: -Number(ordem.valorTotal),
           data: new Date(),
         },
       });
 
       await tx.ordemServico.update({
-        where: { id: Number(id) },
-        data: { status },
+        where: {
+          id: ordemId,
+        },
+        data: {
+          status,
+        },
       });
     });
 
-    return getOrdemById(id);
+    return getOrdemById(ordemId);
   }
 
-  return prisma.ordemServico.update({
-    where: { id: Number(id) },
-    data: { status },
-    include: {
-      cliente: true,
-      servicos: { include: { service: true } },
-      produtos: { include: { produto: true } },
+  const ordemAtualizada = await prisma.ordemServico.update({
+    where: {
+      id: ordemId,
     },
+    data: {
+      status,
+    },
+    include: ordemInclude,
   });
+
+  return normalizeOrdem(ordemAtualizada);
 }
 
 async function deleteOrdem(id) {
-  return prisma.ordemServico.delete({ where: { id: Number(id) } });
+  const ordemId = parsePositiveId(id, "Ordem de servico");
+
+  const ordem = await prisma.ordemServico.findUnique({
+    where: {
+      id: ordemId,
+    },
+  });
+
+  if (!ordem) {
+    throw createHttpError("Ordem de servico nao encontrada", 404);
+  }
+
+  if (ordem.status === "CONCLUIDA") {
+    throw createHttpError(
+      "Nao e possivel excluir uma ordem de servico concluida",
+      409
+    );
+  }
+
+  return prisma.ordemServico.delete({
+    where: {
+      id: ordemId,
+    },
+  });
 }
 
 module.exports = {
