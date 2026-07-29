@@ -4,13 +4,16 @@ import { createOrdem } from "../../services/ordemServicoApi";
 import { getClientes } from "../../services/clienteApi";
 import { getServices } from "../../services/serviceApi";
 import { getProdutos } from "../../services/produtoApi";
+import { getEquipamentosPorCliente } from "../../services/equipamentoApi";
 
 function OrdemServicoModal({ isOpen, onClose, onSuccess }) {
   const [clientes, setClientes] = useState([]);
   const [servicosDisponiveis, setServicosDisponiveis] = useState([]);
   const [produtosDisponiveis, setProdutosDisponiveis] = useState([]);
+  const [equipamentosDisponiveis, setEquipamentosDisponiveis] = useState([]);
 
   const [clienteId, setClienteId] = useState("");
+  const [equipamentoId, setEquipamentoId] = useState("");
   const [observacoes, setObservacoes] = useState("");
   const [servicosSelecionados, setServicosSelecionados] = useState([]);
   const [produtosSelecionados, setProdutosSelecionados] = useState([]);
@@ -42,8 +45,30 @@ function OrdemServicoModal({ isOpen, onClose, onSuccess }) {
     loadOptions();
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen || !clienteId) {
+      setEquipamentosDisponiveis([]);
+      setEquipamentoId("");
+      return;
+    }
+
+    async function loadEquipamentos() {
+      try {
+        const data = await getEquipamentosPorCliente(clienteId);
+        setEquipamentosDisponiveis(data.filter((equipamento) => equipamento.ativo));
+      } catch (error) {
+        console.error("Erro ao carregar equipamentos:", error);
+        setEquipamentosDisponiveis([]);
+      }
+    }
+
+    setEquipamentoId("");
+    loadEquipamentos();
+  }, [clienteId, isOpen]);
+
   function resetForm() {
     setClienteId("");
+    setEquipamentoId("");
     setObservacoes("");
     setServicosSelecionados([]);
     setProdutosSelecionados([]);
@@ -134,26 +159,29 @@ function OrdemServicoModal({ isOpen, onClose, onSuccess }) {
     try {
       setLoading(true);
 
-      await createOrdem({
+      const payload = {
         clienteId: Number(clienteId),
+        equipamentoId: equipamentoId ? Number(equipamentoId) : null,
         observacoes,
         servicos: servicosSelecionados.map((s) => ({
-          serviceId: s.serviceId,
-          valor: s.valor,
+          serviceId: Number(s.serviceId),
+          valor: Number(s.valor),
         })),
         produtos: produtosSelecionados.map((p) => ({
-          produtoId: p.produtoId,
-          quantidade: p.quantidade,
-          precoUnitario: p.precoUnitario,
+          produtoId: Number(p.produtoId),
+          quantidade: Number(p.quantidade),
+          precoUnitario: Number(p.precoUnitario),
         })),
-      });
+      };
+
+      await createOrdem(payload);
 
       await onSuccess();
       resetForm();
       onClose();
     } catch (error) {
-      console.error(error);
-      alert("Erro ao criar ordem de serviço");
+      console.error("Erro ao criar ordem de servico:", error);
+      alert(error?.response?.data?.error || "Erro ao criar ordem de servico");
     } finally {
       setLoading(false);
     }
@@ -166,8 +194,8 @@ function OrdemServicoModal({ isOpen, onClose, onSuccess }) {
     "h-11 w-full rounded-lg border border-slate-700 bg-slate-950/80 px-3 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20";
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/75 px-4 py-8 backdrop-blur-sm lg:items-center">
-      <div className="my-auto w-full max-w-3xl rounded-2xl bg-slate-950/95 p-5 text-left shadow-2xl ring-1 ring-slate-200/10 sm:p-6 lg:max-h-[calc(100vh-4rem)] lg:overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/75 p-4 backdrop-blur-sm sm:p-10 lg:items-center">
+      <div className="my-auto w-full max-w-3xl rounded-2xl bg-slate-950/95 p-5 text-left shadow-2xl ring-1 ring-slate-200/10 sm:max-h-[calc(100svh-80px)] sm:p-6 sm:overflow-y-auto">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
@@ -210,6 +238,27 @@ function OrdemServicoModal({ isOpen, onClose, onSuccess }) {
                 {clientes.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.nome}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="mb-4 block">
+              <span className={labelClass}>Equipamento</span>
+              <select
+                value={equipamentoId}
+                onChange={(e) => setEquipamentoId(e.target.value)}
+                disabled={!clienteId}
+                className={inputClass}
+              >
+                <option value="">
+                  {clienteId ? "Sem equipamento vinculado" : "Selecione um cliente primeiro"}
+                </option>
+                {equipamentosDisponiveis.map((equipamento) => (
+                  <option key={equipamento.id} value={equipamento.id}>
+                    {[equipamento.nome, equipamento.marca, equipamento.modelo]
+                      .filter(Boolean)
+                      .join(" - ")}
                   </option>
                 ))}
               </select>

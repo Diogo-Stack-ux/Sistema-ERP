@@ -67,8 +67,8 @@ function FinanceiroModal({ isOpen, onClose, onSuccess, tipoInicial = "DESPESA" }
   const categorias = formData.tipo === "RECEITA" ? CATEGORIAS_RECEITA : CATEGORIAS_DESPESA;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/75 px-4 py-8 backdrop-blur-sm lg:items-center">
-      <div className="my-auto w-full max-w-lg rounded-2xl bg-slate-950/95 p-5 shadow-2xl ring-1 ring-slate-200/10 sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/75 p-4 backdrop-blur-sm sm:p-10 lg:items-center">
+      <div className="my-auto w-full max-w-lg rounded-2xl bg-slate-950/95 p-5 shadow-2xl ring-1 ring-slate-200/10 sm:max-h-[calc(100svh-80px)] sm:p-6 sm:overflow-y-auto">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">

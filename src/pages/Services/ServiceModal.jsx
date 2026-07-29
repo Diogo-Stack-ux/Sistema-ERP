@@ -77,22 +77,22 @@ function ServiceModal({ isOpen, onClose, onSuccess, service }) {
   if (!isOpen) return null;
 
   const inputClass =
-    "h-11 w-full rounded-lg border border-slate-700 bg-slate-950/80 px-3 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20";
+    "h-14 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 text-base text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20";
 
-  const labelClass = "mb-1.5 block text-sm font-semibold text-slate-300";
+  const labelClass = "mb-2 block text-base font-semibold text-slate-300";
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/75 px-4 py-8 backdrop-blur-sm lg:items-center">
-      <div className="my-auto w-full max-w-2xl rounded-2xl bg-slate-950/95 p-5 text-left shadow-2xl ring-1 ring-slate-200/10 sm:p-6 lg:max-h-[calc(100vh-4rem)] lg:overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/75 p-4 backdrop-blur-sm sm:p-10 lg:items-center">
+      <div className="my-auto w-full max-w-4xl rounded-3xl bg-slate-950/95 p-6 text-left shadow-2xl ring-1 ring-slate-200/10 sm:max-h-[calc(100svh-80px)] sm:p-8 sm:overflow-y-auto">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-500">
               Serviços
             </p>
-            <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-100">
+            <h2 className="mt-2 text-4xl font-semibold tracking-tight text-slate-100">
               {isEditing ? "Editar Serviço" : "Novo Serviço"}
             </h2>
-            <p className="mt-1 text-sm text-slate-400">
+            <p className="mt-2 text-base text-slate-400">
               {isEditing
                 ? "Altere os dados e salve para atualizar."
                 : "Preencha os dados para cadastrar um novo serviço."}
@@ -102,7 +102,7 @@ function ServiceModal({ isOpen, onClose, onSuccess, service }) {
           <button
             type="button"
             onClick={handleClose}
-            className="rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white"
+            className="rounded-xl border border-slate-700 bg-slate-900/80 px-4 py-3 text-base font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white"
             aria-label="Fechar"
           >
             X
@@ -110,7 +110,7 @@ function ServiceModal({ isOpen, onClose, onSuccess, service }) {
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <label className="sm:col-span-2">
               <span className={labelClass}>Nome</span>
               <input
@@ -130,7 +130,7 @@ function ServiceModal({ isOpen, onClose, onSuccess, service }) {
                 name="descricao"
                 value={formData.descricao}
                 onChange={handleChange}
-                className="min-h-20 w-full resize-none rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20"
+                className="min-h-32 w-full resize-none rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-base text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20"
                 placeholder="Detalhes do serviço"
               />
             </label>
@@ -185,26 +185,26 @@ function ServiceModal({ isOpen, onClose, onSuccess, service }) {
               />
             </label>
 
-            <label className="flex items-center gap-3 rounded-2xl border border-slate-700/60 bg-slate-900/60 px-4 py-3 sm:col-span-2">
+            <label className="flex items-center gap-3 rounded-2xl border border-slate-700/60 bg-slate-900/60 px-4 py-4 sm:col-span-2">
               <input
                 type="checkbox"
                 name="ativo"
                 checked={formData.ativo}
                 onChange={handleChange}
-                className="h-4 w-4 accent-violet-500"
+                className="h-5 w-5 accent-violet-500"
               />
-              <span className="text-sm font-semibold text-slate-200">
+              <span className="text-base font-semibold text-slate-200">
                 Serviço ativo
               </span>
             </label>
           </div>
 
-          <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <button
               type="button"
               onClick={handleClose}
               disabled={loading}
-              className="rounded-lg border border-slate-700 bg-slate-900/80 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-xl border border-slate-700 bg-slate-900/80 px-5 py-3 text-base font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Cancelar
             </button>
@@ -212,7 +212,7 @@ function ServiceModal({ isOpen, onClose, onSuccess, service }) {
             <button
               type="submit"
               disabled={loading}
-              className="rounded-lg bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-xl bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 px-6 py-3 text-base font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? "Salvando..." : isEditing ? "Salvar alterações" : "Salvar"}
             </button>

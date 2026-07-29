@@ -91,7 +91,7 @@ function Financeiro() {
 
   return (
     <>
-      <section className="mx-auto w-full max-w-6xl rounded-[1.25rem] glass-card p-4 ring-1 ring-slate-200/10 sm:p-5">
+      <section className="mx-auto flex w-full max-w-6xl flex-col rounded-[1.25rem] glass-card p-4 ring-1 ring-slate-200/10 sm:p-5">
         <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
@@ -115,7 +115,15 @@ function Financeiro() {
           )}
         </div>
 
-        <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="mb-5 rounded-3xl border border-slate-700/60 bg-slate-950/50 p-4 shadow-inner shadow-slate-100/5 sm:p-5">
+          <div className="mb-4">
+            <h2 className="text-lg font-black text-slate-100">Resumo financeiro</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Totais consolidados de receitas, despesas e saldo.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-2xl border border-emerald-700/40 bg-emerald-500/10 p-4">
             <p className="text-xs uppercase tracking-[0.18em] text-emerald-400">Receitas pagas</p>
             <p className="mt-1 text-2xl font-black text-emerald-300">
@@ -134,9 +142,11 @@ function Financeiro() {
               {formatCurrency(totais.saldo)}
             </p>
           </div>
+          </div>
         </div>
 
-        <div className="mb-5 -mx-4 flex gap-2 overflow-x-auto border-b border-slate-700/60 px-4 pb-1 sm:mx-0 sm:px-0">
+        <div className="mb-5 rounded-3xl border border-slate-700/60 bg-slate-950/50 p-3 shadow-inner shadow-slate-100/5 sm:p-4">
+          <div className="flex gap-2 overflow-x-auto border-b border-slate-700/60 pb-1">
           {[
             { key: "contas-pagar", label: "💸 Contas a Pagar" },
             { key: "contas-receber", label: "💰 Contas a Receber" },
@@ -154,6 +164,7 @@ function Financeiro() {
               {label}
             </button>
           ))}
+          </div>
         </div>
 
         {loading ? (
@@ -161,7 +172,7 @@ function Financeiro() {
             Carregando...
           </div>
         ) : aba === "fluxo-caixa" ? (
-          <div className="overflow-hidden rounded-3xl border border-slate-700/60 bg-slate-950/50">
+          <div className="rounded-3xl border border-slate-700/60 bg-slate-950/50 p-4">
             {Object.keys(fluxoPorMes).length === 0 ? (
               <p className="p-8 text-center text-sm text-slate-400">
                 Nenhum lançamento pago/recebido ainda.
@@ -257,7 +268,7 @@ function Financeiro() {
               </div>
 
               <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[700px] text-left text-sm">
+                <table className="w-full min-w-[700px] border-separate border-spacing-y-3 text-left text-sm">
                   <thead className="bg-slate-900/90 text-xs uppercase tracking-[0.18em] text-slate-400">
                     <tr>
                       <th className="px-4 py-3 font-semibold">Descrição</th>
@@ -268,7 +279,7 @@ function Financeiro() {
                       <th className="px-4 py-3 font-semibold">Ações</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-700/60">
+                  <tbody>
                     {lancamentos.map((l) => {
                       const vencido =
                         l.status === "PENDENTE" &&
@@ -276,19 +287,19 @@ function Financeiro() {
                         new Date(l.vencimento) < new Date();
 
                       return (
-                        <tr key={l.id} className="text-slate-300 transition hover:bg-slate-900/60">
-                          <td className="px-4 py-4">
+                        <tr key={l.id} className="text-slate-300 shadow-sm shadow-slate-950/30 transition hover:bg-slate-900/80">
+                          <td className="rounded-l-2xl border-y border-l border-slate-700/60 bg-slate-900/70 px-4 py-4">
                             <p className="font-semibold text-slate-100">{l.descricao}</p>
                             {vencido && (
                               <span className="text-xs text-rose-400">⚠ Vencido</span>
                             )}
                           </td>
-                          <td className="px-4 py-4 text-slate-400">{l.categoria || "—"}</td>
-                          <td className={`px-4 py-4 font-semibold ${l.tipo === "RECEITA" ? "text-emerald-300" : "text-rose-300"}`}>
+                          <td className="border-y border-slate-700/60 bg-slate-900/70 px-4 py-4 text-slate-400">{l.categoria || "—"}</td>
+                          <td className={`border-y border-slate-700/60 bg-slate-900/70 px-4 py-4 font-semibold ${l.tipo === "RECEITA" ? "text-emerald-300" : "text-rose-300"}`}>
                             {formatCurrency(l.valor)}
                           </td>
-                          <td className="px-4 py-4">{formatDate(l.vencimento)}</td>
-                          <td className="px-4 py-4">
+                          <td className="border-y border-slate-700/60 bg-slate-900/70 px-4 py-4">{formatDate(l.vencimento)}</td>
+                          <td className="border-y border-slate-700/60 bg-slate-900/70 px-4 py-4">
                             <select
                               value={l.status}
                               onChange={(e) => handleStatusChange(l.id, e.target.value)}
@@ -300,7 +311,7 @@ function Financeiro() {
                               <option value="CANCELADO">Cancelado</option>
                             </select>
                           </td>
-                          <td className="px-4 py-4">
+                          <td className="rounded-r-2xl border-y border-r border-slate-700/60 bg-slate-900/70 px-4 py-4">
                             <button
                               onClick={() => setDeletingId(l.id)}
                               className="rounded-lg border border-red-800/60 bg-red-950/40 px-3 py-1.5 text-xs font-semibold text-red-400 transition hover:bg-red-900/50 hover:text-red-300"

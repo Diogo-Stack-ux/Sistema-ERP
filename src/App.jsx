@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+﻿import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -10,10 +10,22 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  updateProfile,
+} from "firebase/auth";
 import api from "./services/api";
+import heroImage from "./assets/hero.png";
+import plansBg from "./assets/plans-bg.png";
+import welcomeBg from "./assets/welcome-bg.png";
+import { firebaseAuth, googleProvider } from "./services/firebase";
 
 const Services = lazy(() => import("./pages/Services/Services"));
 const OrdensServico = lazy(() => import("./pages/OrdensServico/OrdensServico"));
+const Equipamentos = lazy(() => import("./pages/Equipamentos/Equipamentos"));
 const Financeiro = lazy(() => import("./pages/Financeiro/Financeiro"));
 const ClientProfileModal = lazy(() => import("./components/ClientProfileModal"));
 
@@ -26,12 +38,21 @@ function PageFallback() {
 }
 
 function App() {
+  const subscriptionEnforced = import.meta.env.VITE_SUBSCRIPTION_ENFORCED === "true";
   const [pagina, setPagina] = useState("dashboard");
   const [token, setToken] = useState(
     localStorage.getItem("token") || ""
   );
+  const [assinatura, setAssinatura] = useState(
+    localStorage.getItem("assinaturaPacote") || ""
+  );
+  const [onboardingPage, setOnboardingPage] = useState("welcome");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [clientProfileOpen, setClientProfileOpen] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState(null);
+  const [subscriptionStatus, setSubscriptionStatus] = useState(null);
+  const [checkingSubscription, setCheckingSubscription] = useState(false);
+  const [subscriptionError, setSubscriptionError] = useState("");
 
   const [loginData, setLoginData] = useState({
     email: "",
@@ -39,58 +60,62 @@ function App() {
   });
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [loginErro, setLoginErro] = useState("");
-  const googleClientIdRaw = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
-  const googleClientId = googleClientIdRaw.includes("seu-client-id-do-google") ? "" : googleClientIdRaw;
+
+  const getFirebaseAuthMessage = (error) => {
+    const code = error?.code;
+
+    const messages = {
+      "auth/email-already-in-use": "Este e-mail ja esta cadastrado. Use login ou escolha outro e-mail.",
+      "auth/invalid-email": "Informe um e-mail valido.",
+      "auth/invalid-credential": "E-mail ou senha incorretos.",
+      "auth/missing-password": "Informe uma senha.",
+      "auth/operation-not-allowed": "Login por e-mail e senha nao esta ativado no Firebase.",
+      "auth/popup-closed-by-user": "A janela do Google foi fechada antes de concluir o login.",
+      "auth/too-many-requests": "Muitas tentativas. Aguarde alguns minutos e tente novamente.",
+      "auth/user-not-found": "Usuario nao encontrado.",
+      "auth/weak-password": "A senha precisa ter pelo menos 6 caracteres.",
+      "auth/wrong-password": "Senha incorreta.",
+    };
+
+    return messages[code] || `Erro de autenticacao: ${code || error?.message || "erro desconhecido"}`;
+  };
+
+  const aplicarTokenFirebase = async (user) => {
+    const idToken = await user.getIdToken(true);
+
+    localStorage.setItem("token", idToken);
+    setToken(idToken);
+
+    api.defaults.headers.common.Authorization = `Bearer ${idToken}`;
+  };
 
   const fazerLogin = async () => {
     try {
       setLoginErro("");
 
-      const response =
-        await api.post("/auth/login", {
-          email: loginData.email,
-          senha: loginData.senha,
-        });
-
-      localStorage.setItem(
-        "token",
-        response.data.token
+      const credential = await signInWithEmailAndPassword(
+        firebaseAuth,
+        loginData.email,
+        loginData.senha
       );
 
-      setToken(response.data.token);
-
-      api.defaults.headers.common.Authorization =
-        `Bearer ${response.data.token}`;
+      await aplicarTokenFirebase(credential.user);
     } catch (error) {
       console.error(error);
-      setLoginErro("E-mail ou senha incorretos. Confira os dados e tente novamente.");
+      setLoginErro(getFirebaseAuthMessage(error));
     }
   };
 
-  const fazerLoginGoogle = async (credential) => {
+  const fazerLoginGoogle = async () => {
     try {
       setLoginErro("");
 
-      const response =
-        await api.post("/auth/google", {
-          credential,
-        });
+      const credential = await signInWithPopup(firebaseAuth, googleProvider);
 
-      localStorage.setItem(
-        "token",
-        response.data.token
-      );
-
-      setToken(response.data.token);
-
-      api.defaults.headers.common.Authorization =
-        `Bearer ${response.data.token}`;
+      await aplicarTokenFirebase(credential.user);
     } catch (error) {
       console.error(error);
-      const mensagemErro =
-        error?.response?.data?.error ||
-        "Nao foi possivel entrar com Google. Tente novamente.";
-      setLoginErro(mensagemErro);
+      setLoginErro(getFirebaseAuthMessage(error));
     }
   };
 
@@ -103,32 +128,37 @@ function App() {
 
   const fazerCadastro = async () => {
     try {
-      await api.post("/auth/register", {
-        nome: cadastroData.nome,
-        email: cadastroData.email,
-        senha: cadastroData.senha,
-      });
-
-      const loginResponse = await api.post("/auth/login", {
-        email: cadastroData.email,
-        senha: cadastroData.senha,
-      });
-
-      localStorage.setItem(
-        "token",
-        loginResponse.data.token
+      const credential = await createUserWithEmailAndPassword(
+        firebaseAuth,
+        cadastroData.email,
+        cadastroData.senha
       );
 
-      setToken(loginResponse.data.token);
-      api.defaults.headers.common.Authorization =
-        `Bearer ${loginResponse.data.token}`;
+      if (cadastroData.nome) {
+        await updateProfile(credential.user, {
+          displayName: cadastroData.nome,
+        });
+      }
+
+      await aplicarTokenFirebase(credential.user);
     } catch (error) {
       console.error(error);
-      const mensagemErro =
-        error?.response?.data?.error ||
-        "Erro ao cadastrar. Verifique os dados e tente novamente.";
-      alert(mensagemErro);
+      setLoginErro(getFirebaseAuthMessage(error));
     }
+  };
+
+  const fazerLogout = async () => {
+    await signOut(firebaseAuth);
+    localStorage.removeItem("token");
+    localStorage.removeItem("assinaturaPacote");
+    delete api.defaults.headers.common.Authorization;
+    setToken("");
+    setSubscriptionStatus(null);
+    setSubscriptionError("");
+    setAssinatura("");
+    setOnboardingPage("welcome");
+    setPagina("dashboard");
+    setSidebarOpen(true);
   };
 
   useEffect(() => {
@@ -141,45 +171,60 @@ function App() {
   }, [token]);
 
   useEffect(() => {
-    if (token || isRegistering || !googleClientId) {
-      return;
-    }
-
-    const renderizarBotaoGoogle = () => {
-      const botaoGoogle = document.getElementById("google-login-button");
-
-      if (!window.google || !botaoGoogle) {
-        return;
-      }
-
-      botaoGoogle.innerHTML = "";
-
-      window.google.accounts.id.initialize({
-        client_id: googleClientId,
-        callback: (response) => fazerLoginGoogle(response.credential),
-      });
-
-      window.google.accounts.id.renderButton(botaoGoogle, {
-        theme: "filled_black",
-        size: "large",
-        shape: "pill",
-        text: "signin_with",
-        width: botaoGoogle.offsetWidth,
-      });
+    const handleUnauthorized = () => {
+      fazerLogout();
     };
 
-    if (window.google) {
-      renderizarBotaoGoogle();
+    window.addEventListener("auth:unauthorized", handleUnauthorized);
+
+    return () => {
+      window.removeEventListener("auth:unauthorized", handleUnauthorized);
+    };
+  }, []);
+
+  const verificarAssinatura = async () => {
+    try {
+      setCheckingSubscription(true);
+      setSubscriptionError("");
+
+      const response = await api.get("/billing/status");
+      const subscription = response.data.subscription;
+
+      setSubscriptionStatus(subscription);
+
+      if (subscription?.active) {
+        localStorage.setItem("assinaturaPacote", subscription.plan || "Essencial");
+        setAssinatura(subscription.plan || "Essencial");
+      }
+
+      return subscription;
+    } catch (error) {
+      console.error("Erro ao verificar assinatura:", error);
+      const subscription = error?.response?.data?.subscription;
+
+      if (subscription) {
+        setSubscriptionStatus(subscription);
+      }
+
+      setSubscriptionError(
+        error?.response?.data?.detail ||
+        error?.response?.data?.error ||
+        "Nao foi possivel verificar o pagamento agora."
+      );
+      return null;
+    } finally {
+      setCheckingSubscription(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!token || !subscriptionEnforced) {
+      setSubscriptionStatus(null);
       return;
     }
 
-    const script = document.createElement("script");
-    script.src = "https://accounts.google.com/gsi/client";
-    script.async = true;
-    script.defer = true;
-    script.onload = renderizarBotaoGoogle;
-    document.body.appendChild(script);
-  }, [token, isRegistering, googleClientId]);
+    verificarAssinatura();
+  }, [token, subscriptionEnforced]);
 
   const [dados, setDados] = useState({
     totalClientes: 0,
@@ -542,7 +587,7 @@ function App() {
 
   const criarMovimentacao = async () => {
     if (!produtoId || !quantidadeMov || quantidadeMov <= 0) {
-      alert("Selecione um produto e insira uma quantidade válida!");
+      alert("Selecione um produto e insira uma quantidade v\u00e1lida!");
       return;
     }
     try {
@@ -563,7 +608,7 @@ function App() {
   };
 
   useEffect(() => {
-    if (!token) {
+    if (!token || (subscriptionEnforced && !subscriptionStatus?.active)) {
       return;
     }
 
@@ -608,7 +653,7 @@ function App() {
     return () => {
       cancelado = true;
     };
-  }, [token]);
+  }, [token, subscriptionEnforced, subscriptionStatus?.active]);
 
   const eventosFiltrados = useMemo(() => eventos.filter((evento) => {
     if (filtroCalendario === "todos") return true;
@@ -640,7 +685,7 @@ function App() {
   }, [produtos, buscaProduto]);
 
   const botaoMenuClasse = (nomePagina) =>
-    `shrink-0 rounded-xl px-3.5 py-2.5 text-left text-[13px] font-semibold transition-all lg:w-full ${pagina === nomePagina
+    `shrink-0 rounded-xl px-4 py-4 text-left text-base font-bold transition-all lg:w-full ${pagina === nomePagina
       ? "bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-2xl shadow-fuchsia-500/20"
       : "text-slate-300 hover:bg-slate-800 hover:text-white"
     }`;
@@ -649,28 +694,289 @@ function App() {
     ["dashboard", "Dashboard"],
     ["clientes", "Clientes"],
     ["produtos", "Produtos"],
-    ["services", "Servicos"],
-    ["ordens-servico", "Ordens de Servico"],
-    ["movimentacoes", "Movimentacoes"],
+    ["services", "Serviços"],
+    ["ordens-servico", "Ordens de Serviço"],
+    ["equipamentos", "Equipamentos"],
+    ["movimentacoes", "Movimentações"],
     ["financeiro", "Financeiro"],
-    ["calendario", "Calendario"],
+    ["calendario", "Calendário"],
   ];
+
+  const subscriptionPlans = [
+    {
+      pacote: "Plano essencial",
+      preco: "R$49,90/mês",
+      paraQuem: "Profissional autônomo",
+      incluido: "Clientes, equipamentos, serviços, OS e agenda",
+      paymentLink: "https://mpago.la/2BTRPQd",
+    },
+    {
+      pacote: "Essencial anual",
+      preco: "R$499,00/ano",
+      paraQuem: "Quem quer manter o sistema ativo o ano inteiro",
+      incluido: "Plano essencial com pagamento anual único pelo Mercado Pago",
+      paymentLink: "https://mpago.la/1zEBQLR",
+      buttonDisabled: true,
+    },
+    {
+      pacote: "Plano Profissional",
+      preco: "R$89,90/mês",
+      paraQuem: "Equipes e operações em crescimento",
+      incluido: "Recursos completos do Essencial com maior capacidade operacional",
+      paymentLink: "https://mpago.la/1dXRoed",
+      buttonDisabled: true,
+    },
+    {
+      pacote: "Profissional Anual",
+      preco: "R$899,00/ano",
+      paraQuem: "Equipes que preferem pagamento anual",
+      incluido: "Plano profissional com pagamento anual único pelo Mercado Pago",
+      paymentLink: "https://mpago.la/1scvFQy",
+      buttonDisabled: true,
+    },
+    {
+      pacote: "Plano Premium",
+      preco: "R$149,90/mês",
+      paraQuem: "Operações avançadas com maior volume",
+      incluido: "Recursos completos do Profissional com prioridade para expansão",
+      paymentLink: "https://mpago.la/2YifMnW",
+      buttonDisabled: true,
+    },
+    {
+      pacote: "Premium Anual",
+      preco: "Em breve",
+      paraQuem: "Plano anual em preparação",
+      incluido: "Valor e link serão definidos antes da liberação",
+      // paymentLink: "adicione-o-link-do-premium-anual",
+      buttonDisabled: true,
+    },
+  ];
+
+  function handleMenuClick(key) {
+    setPagina(key);
+
+    if (window.innerWidth < 1024) {
+      setSidebarOpen(false);
+    }
+  }
+
+  function handleAssinarPacote(pacote) {
+    localStorage.setItem("assinaturaPacote", pacote);
+    setAssinatura(pacote);
+    setPagina("dashboard");
+  }
+
+  if (!assinatura) {
+    return (
+      <div className="relative isolate min-h-screen overflow-hidden bg-[#060b1b] text-slate-100">
+        {onboardingPage === "welcome" ? (
+          <>
+            <img
+              src={welcomeBg}
+              alt=""
+              className="pointer-events-none absolute inset-0 -z-20 h-full w-full object-cover object-center"
+            />
+            <div className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(2,6,23,0.9)_0%,rgba(2,6,23,0.7)_42%,rgba(2,6,23,0.28)_100%)]" />
+            <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_48%,rgba(99,102,241,0.28),transparent_34%)]" />
+          </>
+        ) : onboardingPage === "planos" ? (
+          <>
+            <img
+              src={plansBg}
+              alt=""
+              className="pointer-events-none absolute inset-0 -z-20 h-full w-full object-cover object-center"
+            />
+            <div className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgba(2,6,23,0.88)_0%,rgba(2,6,23,0.78)_36%,rgba(2,6,23,0.92)_100%)]" />
+            <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.18),transparent_34%)]" />
+          </>
+        ) : (
+          <div className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(135deg,rgba(99,102,241,0.28)_0%,rgba(15,23,42,0.08)_34%,rgba(2,6,23,1)_72%)]" />
+        )}
+        <img
+          src={heroImage}
+          alt=""
+          className={`pointer-events-none absolute right-[-4rem] top-20 -z-10 hidden w-[28rem] opacity-20 blur-[1px] lg:block xl:right-20 ${
+            onboardingPage === "welcome" ? "lg:hidden" : ""
+          }`}
+        />
+
+        <header className="mx-auto flex w-full max-w-7xl items-center justify-between px-5 py-7 sm:px-10">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.28em] text-violet-300">
+              Nuvix Organizer
+            </p>
+            <h1 className="mt-2 max-w-4xl text-3xl font-black tracking-tight text-white sm:text-4xl">
+              Sistema de gestão para serviços e equipamentos
+            </h1>
+          </div>
+        </header>
+
+        {onboardingPage === "welcome" ? (
+          <main className="mx-auto grid min-h-[calc(100vh-8rem)] w-full max-w-7xl items-center gap-12 px-5 py-10 sm:px-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(28rem,0.95fr)] xl:gap-16">
+            <section className="max-w-4xl">
+              <p className="inline-flex rounded-full border border-fuchsia-400/30 bg-fuchsia-400/10 px-4 py-2 text-sm font-black uppercase tracking-[0.28em] text-fuchsia-200">
+                Bem-vindo
+              </p>
+              <h2 className="mt-7 max-w-4xl text-5xl font-black leading-[0.95] text-white sm:text-6xl xl:text-7xl">
+                Organize clientes, equipamentos, ordens e agenda em um só lugar.
+              </h2>
+              <p className="mt-8 max-w-3xl text-xl leading-9 text-slate-300">
+                Um painel completo para profissionais que precisam controlar servi\u00e7os,
+                ativos, histórico de atendimento e comprovantes com mais clareza.
+              </p>
+
+              <div className="mt-8 grid max-w-3xl grid-cols-1 gap-3 sm:grid-cols-3">
+                {[
+                  ["Clientes", "perfil e histórico"],
+                  ["Serviços", "ordens e status"],
+                  ["Agenda", "datas importantes"],
+                ].map(([title, text]) => (
+                  <div
+                    key={title}
+                    className="rounded-2xl border border-slate-700/60 bg-slate-950/55 p-4 shadow-xl shadow-slate-950/30 backdrop-blur"
+                  >
+                    <p className="text-sm font-black text-white">{title}</p>
+                    <p className="mt-1 text-sm text-slate-400">{text}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
+                <button
+                  type="button"
+                  onClick={() => setOnboardingPage("planos")}
+                  className="rounded-2xl bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 px-8 py-4 text-lg font-black text-white shadow-2xl shadow-fuchsia-950/40 transition hover:-translate-y-0.5 hover:opacity-90"
+                >
+                  Ver pacotes
+                </button>
+                <span className="text-base font-semibold text-slate-400">
+                  Comece pelo plano ideal para sua rotina.
+                </span>
+              </div>
+            </section>
+
+            <section className="relative grid gap-5">
+              <div className="relative mb-2 hidden justify-end lg:flex">
+                <img
+                  src={heroImage}
+                  alt=""
+                  className="w-52 drop-shadow-[0_28px_60px_rgba(168,85,247,0.28)]"
+                />
+              </div>
+              {[
+                ["Clientes", "Cadastro, perfil e histórico organizados."],
+                ["Equipamentos", "Ativos vinculados aos clientes, com garantia e detalhes."],
+                ["Ordens de Serviço", "Serviços, produtos, status e comprovante para envio."],
+              ].map(([title, text], index) => (
+                <article
+                  key={title}
+                  className={`rounded-[1.5rem] border border-slate-700/60 bg-slate-950/70 p-6 shadow-2xl shadow-slate-950/40 backdrop-blur transition hover:-translate-y-1 hover:border-violet-400/50 ${
+                    index === 1 ? "lg:ml-10" : index === 2 ? "lg:ml-20" : ""
+                  }`}
+                >
+                  <p className="text-sm font-black uppercase tracking-[0.22em] text-violet-300">
+                    {title}
+                  </p>
+                  <p className="mt-3 text-xl font-semibold leading-8 text-slate-100">
+                    {text}
+                  </p>
+                </article>
+              ))}
+            </section>
+          </main>
+        ) : (
+          <main className="mx-auto flex min-h-[calc(100vh-7rem)] w-full max-w-7xl flex-col justify-center px-5 py-8 sm:px-10">
+            <div className="mb-8 max-w-5xl">
+              <p className="text-sm font-black uppercase tracking-[0.32em] text-fuchsia-300">
+                Assinatura
+              </p>
+              <h2 className="mt-4 text-4xl font-black leading-tight text-white sm:text-5xl">
+                Escolha o plano ideal.
+              </h2>
+              <p className="mt-4 text-xl leading-8 text-slate-300">
+                O sistema será liberado após a seleção de um pacote.
+              </p>
+              <p className="mt-4 max-w-4xl text-sm font-semibold leading-7 text-slate-400">
+                6 planos disponíveis: Essencial mensal, Essencial anual, Profissional mensal,
+                Profissional anual, Premium mensal e Premium anual.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 items-stretch gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {subscriptionPlans.map((plan) => (
+                <article
+                  key={plan.pacote}
+                  className="flex min-h-[27rem] min-w-0 flex-col rounded-[1.5rem] border border-slate-700/60 bg-slate-950/70 p-6 shadow-2xl shadow-slate-950/40"
+                >
+                  <p className="text-sm font-black uppercase tracking-[0.18em] text-violet-300">
+                    {plan.pacote}
+                  </p>
+                  <h3 className="mt-3 break-words text-3xl font-black leading-tight text-white">
+                    {plan.preco}
+                  </h3>
+                  <div className="mt-5 grid gap-3">
+                    <div className="rounded-2xl bg-slate-900/80 p-4">
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+                        Para quem
+                      </p>
+                      <p className="mt-2 text-base font-semibold leading-7">{plan.paraQuem}</p>
+                    </div>
+                    <div className="rounded-2xl bg-slate-900/80 p-4">
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+                        Incluído
+                      </p>
+                      <p className="mt-2 text-base font-semibold leading-7">{plan.incluido}</p>
+                    </div>
+                  </div>
+                  {plan.buttonDisabled ? (
+                    <button
+                      type="button"
+                      disabled
+                      className="mt-auto cursor-not-allowed rounded-2xl border border-slate-700 bg-slate-900/80 px-5 py-4 text-center text-base font-black leading-6 text-slate-300 opacity-85"
+                    >
+                      Assinar {plan.pacote}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleAssinarPacote(plan.pacote)}
+                      className="mt-auto rounded-2xl bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 px-5 py-4 text-base font-black text-white transition hover:opacity-90"
+                    >
+                      Assinar {plan.pacote}
+                    </button>
+                  )}
+                </article>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setOnboardingPage("welcome")}
+              className="mt-8 self-start rounded-2xl border border-slate-600 px-6 py-3 text-base font-bold text-slate-200 transition hover:bg-slate-900"
+            >
+              Voltar
+            </button>
+          </main>
+        )}
+      </div>
+    );
+  }
 
   if (!token) {
     return (
       <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.2),_transparent_25%),radial-gradient(circle_at_bottom_right,_rgba(236,72,153,0.18),_transparent_22%),bg-slate-950] flex items-center justify-center px-4 py-10">
-        <div className="w-full max-w-md rounded-[2rem] border border-white/10 bg-slate-900/95 shadow-2xl shadow-violet-500/20 backdrop-blur-xl overflow-hidden">
+        <div className="w-full max-w-xl overflow-hidden rounded-[2rem] border border-white/10 bg-slate-900/95 shadow-2xl shadow-violet-500/20 backdrop-blur-xl">
           <div className="bg-gradient-to-r from-indigo-500 via-violet-600 to-fuchsia-500 px-8 py-10 text-center">
-            <p className="text-xs uppercase tracking-[0.4em] text-slate-200/80 mb-3">Bem-vindo ao</p>
-            <h1 className="text-4xl font-black text-white tracking-tight">Nuvix Organizer</h1>
-            <p className="mt-3 text-sm text-slate-200/80 leading-relaxed">
-              Faça login para acessar o painel de controle e gerenciar seu negócio com segurança.
+            <p className="mb-3 text-sm font-bold uppercase tracking-[0.32em] text-slate-200/80">Bem-vindo ao</p>
+            <h1 className="text-5xl font-black tracking-tight text-white">Nuvix Organizer</h1>
+            <p className="mt-4 text-lg leading-8 text-slate-200/85">
+              Fa\u00e7a login para acessar o painel de controle e gerenciar seu neg\u00f3cio com seguran\u00e7a.
             </p>
           </div>
 
-          <div className="px-8 py-10 space-y-6">
-            <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/90 p-6 shadow-[0_30px_80px_-40px_rgba(124,58,237,0.75)]">
-              <p className="mb-6 text-sm uppercase tracking-[0.3em] text-slate-400">
+          <div className="space-y-7 px-8 py-10 sm:px-10">
+            <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/90 p-7 shadow-[0_30px_80px_-40px_rgba(124,58,237,0.75)]">
+              <p className="mb-6 text-base font-bold uppercase tracking-[0.24em] text-slate-400">
                 {isRegistering ? "Crie sua conta" : "Acesse sua conta"}
               </p>
 
@@ -678,24 +984,26 @@ function App() {
                 <input
                   type="text"
                   placeholder="Nome"
-                  className="w-full rounded-2xl border border-slate-700 bg-slate-900/80 px-4 py-3 text-slate-100 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20 mb-4"
+                  className="mb-4 w-full rounded-2xl border border-slate-700 bg-slate-900/80 px-5 py-4 text-lg text-slate-100 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20"
                   value={cadastroData.nome}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    setLoginErro("");
                     setCadastroData({
                       ...cadastroData,
                       nome: e.target.value,
-                    })
-                  }
+                    });
+                  }}
                 />
               )}
 
               <input
                 type="email"
                 placeholder="Email"
-                className="w-full rounded-2xl border border-slate-700 bg-slate-900/80 px-4 py-3 text-slate-100 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20"
+                className="w-full rounded-2xl border border-slate-700 bg-slate-900/80 px-5 py-4 text-lg text-slate-100 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20"
                 value={isRegistering ? cadastroData.email : loginData.email}
                 onChange={(e) => {
                   if (isRegistering) {
+                    setLoginErro("");
                     setCadastroData({
                         ...cadastroData,
                         email: e.target.value,
@@ -715,10 +1023,11 @@ function App() {
                 <input
                   type={mostrarSenha ? "text" : "password"}
                   placeholder="Senha"
-                  className="w-full rounded-2xl border border-slate-700 bg-slate-900/80 px-4 py-3 pr-14 text-slate-100 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20"
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-900/80 px-5 py-4 pr-14 text-lg text-slate-100 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20"
                   value={isRegistering ? cadastroData.senha : loginData.senha}
                   onChange={(e) => {
                     if (isRegistering) {
+                      setLoginErro("");
                       setCadastroData({
                           ...cadastroData,
                           senha: e.target.value,
@@ -774,7 +1083,7 @@ function App() {
                 </button>
               </div>
 
-              {!isRegistering && loginErro && (
+              {loginErro && (
                 <div
                   role="alert"
                   className="mt-4 flex gap-3 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-left shadow-lg shadow-rose-950/20"
@@ -796,10 +1105,10 @@ function App() {
                     </svg>
                   </span>
                   <div>
-                    <p className="text-sm font-semibold text-rose-100">
-                      Login invalido
+                    <p className="text-base font-semibold text-rose-100">
+                      {isRegistering ? "Cadastro inv\u00e1lido" : "Login inv\u00e1lido"}
                     </p>
-                    <p className="mt-1 text-sm leading-5 text-rose-100/75">
+                    <p className="mt-1 text-base leading-6 text-rose-100/75">
                       {loginErro}
                     </p>
                   </div>
@@ -816,56 +1125,47 @@ function App() {
                     <span className="h-px flex-1 bg-slate-700/70" />
                   </div>
 
-                  {googleClientId ? (
-                    <div
-                      id="google-login-button"
-                      className="flex min-h-11 w-full justify-center"
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setLoginErro("Login com Google ainda nao configurado. Configure o Client ID do Google no frontend e no backend.")
-                      }
-                      className="flex h-12 w-full items-center justify-center gap-3 rounded-2xl border border-slate-700 bg-slate-900/80 px-4 text-sm font-semibold text-slate-200 transition hover:border-slate-500 hover:bg-slate-800"
+                  <button
+                    type="button"
+                    onClick={fazerLoginGoogle}
+                    className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl border border-slate-700 bg-slate-900/80 px-4 text-lg font-semibold text-slate-200 transition hover:border-slate-500 hover:bg-slate-800"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      className="h-5 w-5"
+                      viewBox="0 0 24 24"
                     >
-                      <svg
-                        aria-hidden="true"
-                        className="h-5 w-5"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          fill="#4285F4"
-                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                        />
-                        <path
-                          fill="#34A853"
-                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                        />
-                        <path
-                          fill="#FBBC05"
-                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"
-                        />
-                        <path
-                          fill="#EA4335"
-                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"
-                        />
-                      </svg>
-                      Entrar com Google
-                    </button>
-                  )}
+                      <path
+                        fill="#4285F4"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"
+                      />
+                    </svg>
+                    Entrar com Google
+                  </button>
                 </div>
               )}
             </div>
 
             <button
               onClick={isRegistering ? fazerCadastro : fazerLogin}
-              className="w-full rounded-3xl bg-gradient-to-r from-fuchsia-500 via-violet-500 to-indigo-500 py-4 text-lg font-semibold text-white shadow-xl shadow-fuchsia-500/25 transition hover:-translate-y-0.5 hover:shadow-fuchsia-500/40"
+              className="w-full rounded-3xl bg-gradient-to-r from-fuchsia-500 via-violet-500 to-indigo-500 py-5 text-xl font-bold text-white shadow-xl shadow-fuchsia-500/25 transition hover:-translate-y-0.5 hover:shadow-fuchsia-500/40"
             >
               {isRegistering ? "Cadastrar" : "Entrar"}
             </button>
 
-            <p className="text-center text-sm text-slate-400">
+            <p className="text-center text-lg text-slate-400">
               {isRegistering ? (
                 <>
                   Já possui conta?{' '}
@@ -881,7 +1181,7 @@ function App() {
                 </>
               ) : (
                 <>
-                  Ainda não possui conta?{' '}
+                  Ainda n\u00e3o possui conta?{' '}
                   <button
                     onClick={() => {
                       setLoginErro("");
@@ -900,35 +1200,128 @@ function App() {
     );
   }
 
+  if (subscriptionEnforced && (checkingSubscription || !subscriptionStatus?.active)) {
+    const paymentLink =
+      subscriptionStatus?.paymentLink || "https://mpago.la/2BTRPQd";
+
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.2),_transparent_25%),linear-gradient(180deg,#0f172a_0%,#020617_100%)] px-4 py-10 text-slate-100">
+        <section className="w-full max-w-2xl rounded-[1.5rem] border border-slate-700/60 bg-slate-950/90 p-6 shadow-2xl shadow-slate-950/40 sm:p-8">
+          <p className="text-sm font-black uppercase tracking-[0.28em] text-violet-300">
+            Assinatura
+          </p>
+          <h1 className="mt-3 text-4xl font-black tracking-tight text-white">
+            Pagamento necessario
+          </h1>
+          <p className="mt-4 text-lg leading-8 text-slate-300">
+            O acesso ao sistema e liberado somente apos a confirmacao da mensalidade do plano Essencial.
+          </p>
+
+          <div className="mt-6 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-5">
+            <p className="text-sm font-bold uppercase tracking-[0.2em] text-slate-400">
+              Plano Essencial
+            </p>
+            <p className="mt-2 text-3xl font-black text-emerald-300">
+              R$ 49,90 / mes
+            </p>
+            <p className="mt-3 text-sm text-slate-400">
+              Depois do pagamento, clique em verificar para o sistema consultar o Mercado Pago.
+            </p>
+          </div>
+
+          {subscriptionError && (
+            <div className="mt-5 rounded-2xl border border-amber-700/50 bg-amber-950/40 p-4 text-sm font-semibold text-amber-200">
+              {subscriptionError}
+            </div>
+          )}
+
+          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+            <a
+              href={paymentLink}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-h-14 flex-1 items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 px-5 py-3 text-center text-lg font-black text-white transition hover:opacity-90"
+            >
+              Pagar agora
+            </a>
+
+            <button
+              type="button"
+              onClick={verificarAssinatura}
+              disabled={checkingSubscription}
+              className="min-h-14 flex-1 rounded-2xl border border-slate-600 bg-slate-900 px-5 py-3 text-lg font-black text-slate-100 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {checkingSubscription ? "Verificando..." : "Verificar pagamento"}
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={fazerLogout}
+            className="mt-5 rounded-xl px-4 py-2 text-sm font-bold text-slate-400 transition hover:bg-slate-900 hover:text-slate-100"
+          >
+            Sair e voltar ao inicio
+          </button>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen flex-col text-slate-100 app-shell lg:flex-row">
-      <aside className="w-full px-4 py-4 text-white shadow-2xl sidebar-panel lg:min-h-screen lg:w-72 lg:rounded-r-[2rem] lg:px-6 lg:py-8">
-        <div className="mb-4 lg:mb-7">
-          <p className="mb-3 text-[11px] uppercase tracking-[0.35em] text-slate-400">
+      <div className="flex shrink-0 items-center border-b border-slate-700/50 bg-slate-950/80 px-3 py-2 text-white shadow-2xl shadow-slate-950/30 lg:sticky lg:top-0 lg:h-screen lg:flex-col lg:border-b-0 lg:border-r lg:px-2 lg:py-3">
+        <button
+          type="button"
+          onClick={() => setSidebarOpen((current) => !current)}
+          aria-label={sidebarOpen ? "Esconder menu" : "Mostrar menu"}
+          title={sidebarOpen ? "Esconder menu" : "Mostrar menu"}
+          className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-slate-700/70 bg-slate-950/95 text-white shadow-xl shadow-slate-950/30 backdrop-blur transition hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-400"
+        >
+          <span className="relative h-5 w-6">
+            <span
+              className={`absolute left-0 top-0 h-0.5 w-6 rounded-full bg-current transition ${
+                sidebarOpen ? "translate-y-2 rotate-45" : ""
+              }`}
+            />
+            <span
+              className={`absolute left-0 top-2 h-0.5 w-6 rounded-full bg-current transition ${
+                sidebarOpen ? "opacity-0" : ""
+              }`}
+            />
+            <span
+              className={`absolute left-0 top-4 h-0.5 w-6 rounded-full bg-current transition ${
+                sidebarOpen ? "-translate-y-2 -rotate-45" : ""
+              }`}
+            />
+          </span>
+        </button>
+      </div>
+
+      {sidebarOpen && (
+      <aside className="flex w-full flex-col px-4 py-4 text-white shadow-2xl sidebar-panel lg:min-h-screen lg:w-[20rem] xl:w-[22rem] lg:rounded-r-[1.5rem] lg:px-6 xl:px-7 lg:py-7">
+        <div className="mb-5 lg:mb-9">
+          <p className="mb-3 text-sm font-bold uppercase tracking-[0.22em] text-slate-400">
             Painel
           </p>
           <div className="flex items-center justify-between gap-3 lg:block">
-            <h2 className="text-xl font-black tracking-tight lg:text-[1.8rem]">Nuvix Organizer</h2>
+            <h2 className="text-3xl font-black tracking-tight lg:text-[2.15rem]">Nuvix Organizer</h2>
             <button
-              onClick={() => {
-                localStorage.removeItem("token");
-                setToken("");
-              }}
-              className="rounded-lg bg-red-500 px-3 py-2 text-xs font-semibold text-white hover:bg-red-600 lg:hidden"
+              onClick={fazerLogout}
+              className="rounded-lg bg-red-500 px-4 py-2 text-base font-bold text-white hover:bg-red-600 lg:hidden"
             >
               Sair
             </button>
           </div>
-          <p className="mt-2.5 hidden text-[13px] leading-6 text-slate-400 lg:block">
-            Gestao organizada e pronta para o dia a dia.
+          <p className="mt-3 hidden text-base leading-7 text-slate-400 lg:block">
+            Gestão organizada e pronta para o dia a dia.
           </p>
         </div>
 
-        <nav className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-col lg:gap-3 lg:overflow-visible lg:px-0 lg:pb-0">
+        <nav className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-1 lg:flex-col lg:gap-4 lg:overflow-visible lg:px-0 lg:pb-0">
           {menuItems.map(([key, label]) => (
             <button
               key={key}
-              onClick={() => setPagina(key)}
+              onClick={() => handleMenuClick(key)}
               className={botaoMenuClasse(key)}
             >
               {label}
@@ -937,21 +1330,19 @@ function App() {
         </nav>
 
         <button
-          onClick={() => {
-            localStorage.removeItem("token");
-            setToken("");
-          }}
-          className="mt-10 hidden rounded bg-red-500 p-2 text-left hover:bg-red-600 lg:block"
+          onClick={fazerLogout}
+          className="mt-6 hidden rounded-xl bg-red-500 px-4 py-3.5 text-left text-base font-bold hover:bg-red-600 lg:mt-auto lg:block"
         >
           Sair
         </button>
       </aside>
+      )}
 
-      <main className="min-w-0 flex-1 px-3 py-4 md:px-4 lg:px-5">
+      <main className="min-w-0 flex-1 px-3 py-4 md:px-5 lg:px-6 lg:py-6 xl:px-7">
         <div className="w-full min-w-0">
           {pagina === "dashboard" && (
-            <>
-              <div className="mb-5 sm:mb-7">
+            <div className="flex min-h-[calc(100svh-4rem)] flex-col">
+              <div className="mb-5">
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
                   Painel principal
                 </p>
@@ -964,38 +1355,38 @@ function App() {
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-[1.25rem] bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 p-4 text-white shadow-2xl shadow-fuchsia-500/20 ring-1 ring-white/10 sm:rounded-[1.75rem] sm:p-6">
+                <div className="min-h-[8rem] rounded-[1.25rem] bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 p-5 text-white shadow-2xl shadow-fuchsia-500/20 ring-1 ring-white/10 sm:rounded-[1.5rem]">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-100/70">
                     Clientes
                   </p>
-                  <h2 className="mt-4 text-3xl font-black sm:text-4xl">{dados.totalClientes}</h2>
+                  <h2 className="mt-3 text-4xl font-black sm:text-5xl">{dados.totalClientes}</h2>
                   <p className="mt-3 text-sm text-slate-100/80">Total de clientes no sistema</p>
                 </div>
-                <div className="rounded-[1.25rem] bg-gradient-to-br from-sky-600 via-cyan-600 to-teal-500 p-4 text-white shadow-2xl shadow-cyan-500/20 ring-1 ring-white/10 sm:rounded-[1.75rem] sm:p-6">
+                <div className="min-h-[8rem] rounded-[1.25rem] bg-gradient-to-br from-sky-600 via-cyan-600 to-teal-500 p-5 text-white shadow-2xl shadow-cyan-500/20 ring-1 ring-white/10 sm:rounded-[1.5rem]">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-100/70">
                     Produtos
                   </p>
-                  <h2 className="mt-4 text-3xl font-black sm:text-4xl">{dados.totalProdutos}</h2>
+                  <h2 className="mt-3 text-4xl font-black sm:text-5xl">{dados.totalProdutos}</h2>
                   <p className="mt-3 text-sm text-slate-100/80">Produtos cadastrados</p>
                 </div>
-                <div className="rounded-[1.25rem] bg-gradient-to-br from-emerald-600 via-lime-600 to-amber-500 p-4 text-white shadow-2xl shadow-emerald-500/20 ring-1 ring-white/10 sm:rounded-[1.75rem] sm:p-6">
+                <div className="min-h-[8rem] rounded-[1.25rem] bg-gradient-to-br from-emerald-600 via-lime-600 to-amber-500 p-5 text-white shadow-2xl shadow-emerald-500/20 ring-1 ring-white/10 sm:rounded-[1.5rem]">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-100/70">
                     Estoque
                   </p>
-                  <h2 className="mt-4 text-3xl font-black sm:text-4xl">{dados.estoqueTotal}</h2>
+                  <h2 className="mt-3 text-4xl font-black sm:text-5xl">{dados.estoqueTotal}</h2>
                   <p className="mt-3 text-sm text-slate-100/80">Unidades em estoque</p>
                 </div>
-                <div className="rounded-[1.25rem] bg-gradient-to-br from-rose-500 via-pink-500 to-fuchsia-500 p-4 text-white shadow-2xl shadow-rose-500/20 ring-1 ring-white/10 sm:rounded-[1.75rem] sm:p-6">
+                <div className="min-h-[8rem] rounded-[1.25rem] bg-gradient-to-br from-rose-500 via-pink-500 to-fuchsia-500 p-5 text-white shadow-2xl shadow-rose-500/20 ring-1 ring-white/10 sm:rounded-[1.5rem]">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-100/70">
                     Gastos
                   </p>
-                  <h2 className="mt-4 text-3xl font-black sm:text-4xl">R$ {dados.totalGastos}</h2>
+                  <h2 className="mt-3 text-4xl font-black sm:text-5xl">R$ {dados.totalGastos}</h2>
                   <p className="mt-3 text-sm text-slate-100/80">Total gasto no período</p>
                 </div>
               </div>
 
-              <div className="grid gap-4 sm:gap-6 xl:grid-cols-[0.7fr_0.3fr]">
-                <div className="glass-card rounded-[1.25rem] p-4 ring-1 ring-slate-200/10 sm:rounded-[2rem] sm:p-6">
+              <div className="mt-4 grid flex-1 gap-4 xl:grid-cols-[minmax(0,2.4fr)_minmax(20rem,1fr)]">
+                <div className="glass-card flex min-h-[24rem] flex-col rounded-[1.25rem] p-4 ring-1 ring-slate-200/10 sm:rounded-[1.5rem] sm:p-5 xl:min-h-0">
                   <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.32em] text-slate-400">
@@ -1010,8 +1401,8 @@ function App() {
                     </span>
                   </div>
 
-                  <div style={{ width: "100%", minWidth: 0 }}>
-                    <ResponsiveContainer width="100%" height={260} minWidth={0}>
+                  <div className="min-h-[18rem] flex-1" style={{ width: "100%", minWidth: 0 }}>
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                       <BarChart data={dadosGrafico}>
                         <XAxis dataKey="mes" stroke="#94a3b8" />
                         <YAxis stroke="#94a3b8" />
@@ -1022,8 +1413,8 @@ function App() {
                   </div>
                 </div>
 
-                <div className="space-y-6">
-                  <div className="glass-card rounded-[1.25rem] p-4 ring-1 ring-slate-200/10 sm:rounded-[2rem] sm:p-6">
+                <div className="grid gap-4 xl:grid-rows-2">
+                  <div className="glass-card rounded-[1.25rem] p-4 ring-1 ring-slate-200/10 sm:rounded-[1.5rem] sm:p-5">
                     <h2 className="text-xl font-bold mb-4 text-slate-100">
                       Próximos Eventos
                     </h2>
@@ -1044,9 +1435,9 @@ function App() {
                     </div>
                   </div>
 
-                  <div className="glass-card rounded-[1.25rem] p-4 ring-1 ring-slate-200/10 sm:rounded-[2rem] sm:p-6">
+                  <div className="glass-card rounded-[1.25rem] p-4 ring-1 ring-slate-200/10 sm:rounded-[1.5rem] sm:p-5">
                     <h2 className="text-xl font-bold mb-4 text-slate-100">
-                      ⚠ Estoque Baixo
+                      Estoque Baixo
                     </h2>
                     {estoqueBaixo.length === 0 ? (
                       <p className="text-slate-400">Nenhum produto com estoque baixo.</p>
@@ -1068,7 +1459,7 @@ function App() {
                   </div>
                 </div>
               </div>
-            </>
+            </div>
           )}
 
           {pagina === "services" && (
@@ -1083,6 +1474,12 @@ function App() {
             </Suspense>
           )}
 
+          {pagina === "equipamentos" && (
+            <Suspense fallback={<PageFallback />}>
+              <Equipamentos />
+            </Suspense>
+          )}
+
           {pagina === "clientes" && (
             <section>
               <div className="mb-4">
@@ -1091,16 +1488,16 @@ function App() {
                 </p>
                 <div className="mt-2 flex flex-col items-center gap-3 text-center lg:flex-row lg:items-end lg:justify-between lg:text-left">
                   <div className="mx-auto lg:mx-0">
-                    <h1 className="text-[1.7rem] font-black tracking-tight text-slate-100">
+                    <h1 className="text-3xl font-black tracking-tight text-slate-100">
                       Clientes
                     </h1>
-                    <p className="mt-1 text-[13px] text-slate-300">
+                    <p className="mt-1 text-base text-slate-300">
                       Gerencie os clientes cadastrados em um unico lugar.
                     </p>
                   </div>
 
                   {editandoId && (
-                    <div className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">
+                    <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 ring-1 ring-amber-200">
                       Editando cliente. Revise os dados e clique em salvar.
                     </div>
                   )}
@@ -1110,25 +1507,25 @@ function App() {
               <div className="mx-auto w-full max-w-5xl rounded-[1.25rem] glass-card p-4 ring-1 ring-slate-200/10 sm:p-5">
                 <div className="grid grid-cols-1 gap-2 xl:grid-cols-[0.7fr_0.85fr_0.62fr_0.72fr_auto]">
                   <input
-                    className="h-9 rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-[11px] text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
+                    className="h-12 rounded-lg border border-slate-200 bg-slate-50 px-3 text-base text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
                     placeholder="Nome"
                     value={nome}
                     onChange={(e) => setNome(e.target.value)}
                   />
                   <input
-                    className="h-9 rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-[11px] text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
+                    className="h-12 rounded-lg border border-slate-200 bg-slate-50 px-3 text-base text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
                     placeholder="Email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                   />
                   <input
-                    className="h-9 rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-[11px] text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
+                    className="h-12 rounded-lg border border-slate-200 bg-slate-50 px-3 text-base text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
                     placeholder="Telefone"
                     value={telefone}
                     onChange={(e) => setTelefone(e.target.value)}
                   />
                   <input
-                    className="h-9 rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-[11px] text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
+                    className="h-12 rounded-lg border border-slate-200 bg-slate-50 px-3 text-base text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
                     placeholder="Endereco"
                     value={endereco}
                     onChange={(e) => setEndereco(e.target.value)}
@@ -1234,11 +1631,11 @@ function App() {
           )}
 
           {pagina === "produtos" && (
-            <div className="mx-auto w-full max-w-5xl rounded-[1.25rem] glass-card p-4 ring-1 ring-slate-200/10 sm:p-5">
+            <div className="mx-auto flex w-full max-w-5xl flex-col rounded-[1.25rem] glass-card p-4 ring-1 ring-slate-200/10 sm:p-5">
               <div className="mb-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">Estoque</p>
                 <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-100">Produtos</h1>
-                <p className="mt-1 text-sm text-slate-400">Gerencie seu catálogo de produtos e estoque.</p>
+                <p className="mt-1 text-sm text-slate-400">Gerencie seu cat\u00e1logo de produtos e estoque.</p>
               </div>
 
               {/* FORM */}
@@ -1252,7 +1649,7 @@ function App() {
 
                 <input
                   className="min-w-0 border border-slate-200 bg-slate-50 px-3 py-2 rounded-lg text-sm text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
-                  placeholder="Código SKU (auto se vazio)"
+                  placeholder="C\u00f3digo SKU (auto se vazio)"
                   value={skuProduto}
                   onChange={(e) => setSkuProduto(e.target.value)}
                 />
@@ -1267,7 +1664,7 @@ function App() {
 
                 <input
                   className="min-w-0 border border-slate-200 bg-slate-50 px-3 py-2 rounded-lg text-sm text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
-                  placeholder="Preço"
+                  placeholder="Pre\u00e7o"
                   value={preco}
                   onChange={(e) => setPreco(e.target.value)}
                 />
@@ -1288,7 +1685,7 @@ function App() {
                   <option value="produto">Produto</option>
                   <option value="servico">Serviço</option>
                   <option value="moda">Moda</option>
-                  <option value="eletronico">Eletrônico</option>
+                  <option value="eletronico">Eletr\u00f4nico</option>
                   <option value="alimento">Alimento</option>
                   <option value="brinquedo">Brinquedo</option>
                   <option value="outros">Outros</option>
@@ -1304,12 +1701,12 @@ function App() {
 
               <div className="mb-4 relative">
                 <input
-                  placeholder="Buscar por nome, tipo ou código SKU..."
+                  placeholder="Buscar por nome, tipo ou c\u00f3digo SKU..."
                   value={buscaProduto}
                   onChange={(e) => setBuscaProduto(e.target.value)}
                   className="w-full border border-slate-700 bg-slate-900 px-4 py-2.5 pl-10 rounded-xl text-sm text-slate-100 placeholder:text-slate-500 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
                 />
-                <span className="absolute left-3 top-2.5 text-slate-500 text-base">🔍</span>
+                <span className="absolute left-3 top-2.5 text-slate-500 text-base">ðŸ”</span>
               </div>
 
               {/* LISTA */}
@@ -1333,7 +1730,7 @@ function App() {
                               </span>
                             ) : (
                               <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-mono text-slate-500 italic">
-                                sem código
+                                sem c\u00f3digo
                               </span>
                             )}
                             {!codigoProduto && (
@@ -1357,7 +1754,7 @@ function App() {
                               R$ {Number(p.preco).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                             </span>
                             <span className={`text-sm font-semibold ${p.quantidade <= 3 ? 'text-red-400' : 'text-emerald-400'}`}>
-                              Estoque: {p.quantidade} {p.quantidade <= 3 ? '⚠' : ''}
+                              Estoque: {p.quantidade} {p.quantidade <= 3 ? "Baixo" : ""}
                             </span>
                           </div>
                         </div>
@@ -1390,7 +1787,7 @@ function App() {
             </div>
           )}
           {pagina === "movimentacoes" && (
-            <div className="mx-auto w-full max-w-5xl rounded-[1.25rem] glass-card p-4 ring-1 ring-slate-200/10 sm:p-5">
+            <div className="mx-auto flex w-full max-w-5xl flex-col rounded-[1.25rem] glass-card p-4 ring-1 ring-slate-200/10 sm:p-5">
               <div className="mb-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
                   Movimentações
@@ -1403,8 +1800,15 @@ function App() {
                 </p>
               </div>
 
-              {/* FORM */}
-              <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[1.3fr_0.9fr_0.9fr_auto]">
+              <div className="mb-5 rounded-3xl border border-slate-700/60 bg-slate-950/50 p-4 shadow-inner shadow-slate-100/5 sm:p-5">
+                <div className="mb-4">
+                  <h2 className="text-lg font-black text-slate-100">Registrar movimentação</h2>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Informe o produto, o tipo e a quantidade movimentada.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[1.3fr_0.9fr_0.9fr_auto]">
                 <select
                   className="min-w-0 border border-slate-200 bg-slate-50 px-3 py-2 rounded-lg text-sm text-slate-700 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
                   value={produtoId || ""}
@@ -1424,7 +1828,7 @@ function App() {
                   onChange={(e) => setTipo(e.target.value)}
                 >
                   <option value="entrada">Entrada</option>
-                  <option value="saida">Saída</option>
+                  <option value="saida">Sa\u00edda</option>
                 </select>
 
                 <input
@@ -1441,25 +1845,32 @@ function App() {
                 >
                   Registrar
                 </button>
+                </div>
               </div>
 
-              {/* LISTA */}
-              <div className="rounded-2xl bg-slate-950/40 p-3 sm:rounded-3xl sm:p-4">
+              <div className="flex-1 rounded-3xl border border-slate-700/60 bg-slate-950/50 p-4 shadow-inner shadow-slate-100/5 sm:p-5">
+                <div className="mb-4">
+                  <h2 className="text-lg font-black text-slate-100">Hist\u00f3rico de movimenta\u00e7\u00f5es</h2>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Acompanhe as entradas e sa\u00eddas registradas no estoque.
+                  </p>
+                </div>
+
                 {movimentacoes.length === 0 ? (
                   <p className="text-slate-400">Nenhuma movimentação cadastrada</p>
                 ) : (
                   movimentacoes.map((m) => (
                     <div
                       key={m.id}
-                      className="flex flex-col gap-3 border-b border-slate-700/50 py-4 sm:flex-row sm:items-center sm:justify-between"
+                      className="mb-3 flex flex-col gap-3 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4 shadow-sm shadow-slate-950/30 last:mb-0 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div>
                         <p className="font-semibold text-slate-100">
-                          {m.produto?.nome || "Produto não encontrado"}
+                          {m.produto?.nome || "Produto n\u00e3o encontrado"}
                         </p>
 
                         <p
-                          className={`text-sm ${m.tipo === "entrada" ? "text-emerald-400" : "text-rose-400"}`}
+                          className={`mt-2 inline-flex rounded-full px-3 py-1 text-sm font-black ${m.tipo === "entrada" ? "bg-emerald-500/15 text-emerald-300" : "bg-rose-500/15 text-rose-300"}`}
                         >
                           {m.tipo.toUpperCase()} - {m.quantidade}
                         </p>
@@ -1480,14 +1891,14 @@ function App() {
             </Suspense>
           )}
           {pagina === "calendario" && (
-            <div className="mx-auto w-full max-w-5xl rounded-[1.25rem] glass-card p-4 text-left ring-1 ring-slate-200/10 sm:p-5">
+            <div className="mx-auto flex w-full max-w-5xl flex-col rounded-[1.25rem] glass-card p-4 text-left ring-1 ring-slate-200/10 sm:p-5">
               <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
                     Agenda
                   </p>
                   <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-100">
-                    Calendário
+                    Calend\u00e1rio
                   </h1>
                   <p className="mt-1 text-sm text-slate-400">
                     Visualize eventos, compromissos e datas importantes do sistema.
@@ -1510,7 +1921,7 @@ function App() {
               {lembretes.length > 0 && (
                 <div className="mb-4 rounded-3xl border border-slate-700 bg-slate-950/50 p-4">
                   <h2 className="mb-2 font-bold text-slate-100">
-                    🔔 Lembretes
+                    ðŸ”” Lembretes
                   </h2>
 
                   <div className="flex flex-col gap-2">
@@ -1546,11 +1957,11 @@ function App() {
                   className="w-full rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
                 >
                   <option className="bg-slate-950 text-slate-100" value="todos">Todos</option>
-                  <option className="bg-slate-950 text-slate-100" value="reuniao">Reuniões</option>
+                  <option className="bg-slate-950 text-slate-100" value="reuniao">Reuni\u00f5es</option>
                   <option className="bg-slate-950 text-slate-100" value="entrega">Entregas</option>
                   <option className="bg-slate-950 text-slate-100" value="financeiro">Financeiro</option>
                   <option className="bg-slate-950 text-slate-100" value="tarefa">Tarefas</option>
-                  <option className="bg-slate-950 text-slate-100" value="concluidos">Concluídos</option>
+                  <option className="bg-slate-950 text-slate-100" value="concluidos">Conclu\u00eddos</option>
                   <option className="bg-slate-950 text-slate-100" value="pendentes">Pendentes</option>
                 </select>
               </div>
@@ -1578,7 +1989,7 @@ function App() {
                   }}
                   buttonText={{
                     today: "Hoje",
-                    month: "Mês",
+                    month: "M\u00eas",
                     week: "Semana",
                   }}
                 />
@@ -1595,18 +2006,18 @@ function App() {
                         Novo Evento
                       </h2>
                       <p className="mt-1 text-sm text-slate-400">
-                        Preencha os dados para registrar no calendário.
+                        Preencha os dados para registrar no calend\u00e1rio.
                       </p>
                     </div>
 
                     <div className="space-y-4">
                       <label className="block">
                         <span className="mb-1.5 block text-sm font-semibold text-slate-700">
-                          Título
+                          T\u00edtulo
                         </span>
                         <input
                           className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm outline-none transition focus:border-slate-700 focus:ring-2 focus:ring-slate-200"
-                          placeholder="Ex: Reunião com cliente"
+                          placeholder="Ex: Reuni\u00e3o com cliente"
                           value={novoEvento.titulo}
                           onChange={(e) =>
                             setNovoEvento({
@@ -1648,7 +2059,7 @@ function App() {
                             })
                           }
                         >
-                          <option value="reuniao">Reunião</option>
+                          <option value="reuniao">Reuni\u00e3o</option>
                           <option value="entrega">Entrega</option>
                           <option value="tarefa">Tarefa</option>
                           <option value="financeiro">Financeiro</option>

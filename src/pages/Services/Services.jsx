@@ -55,13 +55,13 @@ function Services() {
 
   return (
     <>
-      <section className="mx-auto w-full max-w-5xl rounded-[1.25rem] glass-card p-4 ring-1 ring-slate-200/10 sm:p-5">
+      <section className="mx-auto flex w-full max-w-5xl flex-col rounded-[1.25rem] glass-card p-4 ring-1 ring-slate-200/10 sm:p-5">
         <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
               Cadastro
             </p>
-            <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-100">
+            <h1 className="mt-2 text-4xl font-semibold tracking-tight text-slate-100">
               Serviços
             </h1>
             <p className="mt-1 text-sm text-slate-400">
@@ -159,7 +159,100 @@ function Services() {
             ))}
           </div>
 
-          <div className="hidden overflow-hidden rounded-3xl border border-slate-700/60 bg-slate-950/50 md:block">
+          <div className="hidden space-y-4 md:block">
+            {services.map((service) => (
+              <article
+                key={service.id}
+                className="rounded-3xl border border-slate-700/60 bg-slate-950/50 p-4 shadow-lg shadow-slate-950/20"
+              >
+                <div className="grid gap-3 xl:grid-cols-[1.25fr_0.95fr_0.75fr_0.75fr_0.75fr_0.7fr_auto] xl:items-stretch">
+                  <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
+                    <span className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                      Nome
+                    </span>
+                    <p className="mt-2 text-xl font-semibold text-slate-100">
+                      {service.nome}
+                    </p>
+                    {service.descricao && (
+                      <p className="mt-1 line-clamp-2 text-sm text-slate-400">
+                        {service.descricao}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
+                    <span className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                      Categoria
+                    </span>
+                    <p className="mt-2 font-semibold text-slate-100">
+                      {service.categoria || "Sem categoria"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
+                    <span className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                      Valor
+                    </span>
+                    <p className="mt-2 font-bold text-emerald-300">
+                      {formatCurrency(service.valor)}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
+                    <span className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                      Garantia
+                    </span>
+                    <p className="mt-2 font-semibold text-slate-100">
+                      {service.garantia ? `${service.garantia} dias` : "-"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
+                    <span className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                      DuraÃ§Ã£o
+                    </span>
+                    <p className="mt-2 font-semibold text-slate-100">
+                      {service.duracao ? `${service.duracao} min` : "-"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
+                    <span className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                      Status
+                    </span>
+                    <div className="mt-2">
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-bold ${
+                          service.ativo
+                            ? "bg-emerald-500/15 text-emerald-300"
+                            : "bg-slate-700/70 text-slate-300"
+                        }`}
+                      >
+                        {service.ativo ? "Ativo" : "Inativo"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 xl:flex-col xl:items-stretch xl:justify-center">
+                    <button
+                      onClick={() => handleEdit(service)}
+                      className="rounded-xl border border-slate-700 bg-slate-900/80 px-4 py-2 text-sm font-bold text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => setDeletingId(service.id)}
+                      className="rounded-xl border border-red-800/60 bg-red-950/40 px-4 py-2 text-sm font-bold text-red-400 transition hover:bg-red-900/50 hover:text-red-300"
+                    >
+                      Excluir
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="hidden">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] text-left text-sm">
                 <thead className="bg-slate-900/90 text-xs uppercase tracking-[0.18em] text-slate-400">
