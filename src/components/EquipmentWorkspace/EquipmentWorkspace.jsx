@@ -1,6 +1,7 @@
 import EquipmentHeader from "./EquipmentHeader";
 import EquipmentStats from "./EquipmentStats";
 import EquipmentTimeline from "./EquipmentTimeline";
+import EquipmentHealthCard from "./EquipmentHealthCard";
 
 function EquipmentWorkspace({ equipamento }) {
   if (!equipamento) return null;
@@ -12,6 +13,8 @@ function EquipmentWorkspace({ equipamento }) {
       <EquipmentStats equipamento={equipamento} />
 
       <EquipmentTimeline equipamento={equipamento} />
+
+      <EquipmentHealthCard equipamento={equipamento} />
     </div>
   );
 }

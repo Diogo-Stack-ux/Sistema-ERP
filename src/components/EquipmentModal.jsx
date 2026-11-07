@@ -14,6 +14,8 @@ const initialForm = {
   identificacao: "",
   dataCompra: "",
   garantiaAte: "",
+  frequenciaRevisao: "",
+  tipoFrequenciaRevisao: "",
   observacoes: "",
   ativo: true,
 };
@@ -46,6 +48,8 @@ function EquipmentModal({
         garantiaAte: equipamento.garantiaAte
           ? String(equipamento.garantiaAte).split("T")[0]
           : "",
+        frequenciaRevisao: equipamento.frequenciaRevisao || "",
+        tipoFrequenciaRevisao: equipamento.tipoFrequenciaRevisao || "",
         observacoes: equipamento.observacoes || "",
         ativo: equipamento.ativo ?? true,
       });
@@ -94,6 +98,10 @@ function EquipmentModal({
         identificacao: formData.identificacao.trim() || null,
         dataCompra: formData.dataCompra || null,
         garantiaAte: formData.garantiaAte || null,
+        frequenciaRevisao: formData.frequenciaRevisao
+          ? Number(formData.frequenciaRevisao)
+          : null,
+        tipoFrequenciaRevisao: formData.tipoFrequenciaRevisao || null,
         observacoes: formData.observacoes.trim() || null,
         ativo: formData.ativo,
       };

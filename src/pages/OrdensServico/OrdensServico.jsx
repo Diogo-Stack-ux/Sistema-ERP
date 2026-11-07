@@ -507,55 +507,55 @@ function OrdensServico() {
 
       {comprovanteOrdem && (
         <div className="fixed inset-0 z-[75] flex items-start justify-center overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-sm sm:p-10">
-          <div className="receipt-print my-auto w-full max-w-4xl rounded-3xl bg-white p-6 text-slate-950 shadow-2xl sm:p-8">
-            <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-start sm:justify-between">
+          <div className="receipt-print my-auto w-full max-w-4xl rounded-[1.25rem] bg-slate-950/95 p-5 text-slate-100 shadow-2xl ring-1 ring-slate-200/10 sm:p-6">
+            <div className="flex flex-col gap-4 border-b border-slate-800 pb-5 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <p className="text-sm font-bold uppercase tracking-[0.22em] text-slate-500">
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
                   Comprovante
                 </p>
-                <h2 className="mt-2 text-3xl font-black text-slate-950">
+                <h2 className="mt-2 text-2xl font-black text-slate-100 sm:text-3xl">
                   Ordem de Serviço #{comprovanteOrdem.id}
                 </h2>
-                <p className="mt-1 text-base text-slate-600">
+                <p className="mt-1 text-sm text-slate-400">
                   Serviço concluído em {new Date().toLocaleDateString("pt-BR")}
                 </p>
               </div>
 
-              <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-emerald-700 ring-1 ring-emerald-200">
-                <p className="text-sm font-bold uppercase tracking-[0.16em]">
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-emerald-300">
+                <p className="text-xs font-bold uppercase tracking-[0.18em]">
                   Status
                 </p>
-                <p className="mt-1 text-xl font-black">
+                <p className="mt-1 text-lg font-black">
                   {STATUS_LABELS[comprovanteOrdem.status] || "Concluída"}
                 </p>
               </div>
             </div>
 
             <div className="mt-6 grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-bold uppercase tracking-[0.18em] text-slate-500">
+              <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
                   Cliente
                 </p>
-                <p className="mt-2 text-xl font-bold">
+                <p className="mt-2 text-xl font-bold text-slate-100">
                   {comprovanteOrdem.cliente?.nome || "-"}
                 </p>
-                <p className="mt-1 text-slate-600">
+                <p className="mt-1 text-sm text-slate-400">
                   {comprovanteOrdem.cliente?.telefone || "Telefone não informado"}
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-bold uppercase tracking-[0.18em] text-slate-500">
+              <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
                   Valor total
                 </p>
-                <p className="mt-2 text-3xl font-black text-emerald-700">
+                <p className="mt-2 text-3xl font-black text-emerald-300">
                   {formatCurrency(comprovanteOrdem.valorTotal)}
                 </p>
               </div>
             </div>
 
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-sm font-bold uppercase tracking-[0.18em] text-slate-500">
+            <div className="mt-4 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
                 Serviços realizados
               </p>
               <div className="mt-3 space-y-2">
@@ -563,24 +563,24 @@ function OrdensServico() {
                   comprovanteOrdem.servicos.map((servico) => (
                     <div
                       key={servico.id}
-                      className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3"
+                      className="flex items-center justify-between gap-4 rounded-xl bg-slate-950/70 px-4 py-3"
                     >
-                      <span className="font-semibold">
+                      <span className="font-semibold text-slate-100">
                         {servico.service?.nome || "Serviço"}
                       </span>
-                      <span className="text-slate-600">
+                      <span className="text-sm font-semibold text-slate-300">
                         {formatCurrency(servico.valor || servico.service?.valor)}
                       </span>
                     </div>
                   ))
                 ) : (
-                  <p className="text-slate-500">Nenhum serviço informado.</p>
+                  <p className="text-sm text-slate-400">Nenhum serviço informado.</p>
                 )}
               </div>
             </div>
 
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-sm font-bold uppercase tracking-[0.18em] text-slate-500">
+            <div className="mt-4 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
                 Produtos utilizados
               </p>
               <div className="mt-3 space-y-2">
@@ -588,36 +588,36 @@ function OrdensServico() {
                   comprovanteOrdem.produtos.map((produto) => (
                     <div
                       key={produto.id}
-                      className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3"
+                      className="flex items-center justify-between gap-4 rounded-xl bg-slate-950/70 px-4 py-3"
                     >
-                      <span className="font-semibold">
+                      <span className="font-semibold text-slate-100">
                         {produto.produto?.nome || "Produto"} x{produto.quantidade}
                       </span>
-                      <span className="text-slate-600">
+                      <span className="text-sm font-semibold text-slate-300">
                         {formatCurrency(Number(produto.precoUnitario || produto.produto?.preco || 0) * Number(produto.quantidade || 1))}
                       </span>
                     </div>
                   ))
                 ) : (
-                  <p className="text-slate-500">Nenhum produto utilizado.</p>
+                  <p className="text-sm text-slate-400">Nenhum produto utilizado.</p>
                 )}
               </div>
             </div>
 
             {comprovanteOrdem.observacoes && (
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-bold uppercase tracking-[0.18em] text-slate-500">
+              <div className="mt-4 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
                   Observações
                 </p>
-                <p className="mt-2 text-slate-700">{comprovanteOrdem.observacoes}</p>
+                <p className="mt-2 text-sm text-slate-300">{comprovanteOrdem.observacoes}</p>
               </div>
             )}
 
-            <div className="receipt-actions mt-6 flex flex-row justify-end gap-3">
+            <div className="receipt-actions mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={() => setComprovanteOrdem(null)}
-                className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-base font-bold text-slate-700 transition hover:bg-slate-100"
+                className="rounded-xl border border-slate-700 bg-slate-900/80 px-5 py-3 text-base font-bold text-slate-300 transition hover:bg-slate-800 hover:text-white"
               >
                 Sair
               </button>

@@ -162,6 +162,37 @@ function EquipmentForm({
           />
         </label>
 
+        <label>
+          <span className={labelClass}>Frequência da revisão</span>
+
+          <input
+            type="number"
+            name="frequenciaRevisao"
+            value={formData.frequenciaRevisao || ""}
+            onChange={onChange}
+            min="1"
+            placeholder="Ex.: 6"
+            className={inputClass}
+          />
+        </label>
+
+        <label>
+          <span className={labelClass}>Período da revisão</span>
+
+          <select
+            name="tipoFrequenciaRevisao"
+            value={formData.tipoFrequenciaRevisao || ""}
+            onChange={onChange}
+            className={inputClass}
+          >
+            <option value="">Selecione</option>
+            <option value="DIAS">Dias</option>
+            <option value="SEMANAS">Semanas</option>
+            <option value="MESES">Meses</option>
+            <option value="ANOS">Anos</option>
+          </select>
+        </label>
+
         <label className="md:col-span-2">
           <span className={labelClass}>Observações</span>
 

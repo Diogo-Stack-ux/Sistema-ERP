@@ -20,6 +20,8 @@ const emptyForm = {
   identificacao: "",
   dataCompra: "",
   garantiaAte: "",
+  frequenciaRevisao: "",
+  tipoFrequenciaRevisao: "",
   observacoes: "",
   ativo: true,
 };
@@ -117,6 +119,8 @@ function Equipamentos() {
       garantiaAte: equipamento.garantiaAte
         ? String(equipamento.garantiaAte).slice(0, 10)
         : "",
+      frequenciaRevisao: equipamento.frequenciaRevisao || "",
+      tipoFrequenciaRevisao: equipamento.tipoFrequenciaRevisao || "",
       observacoes: equipamento.observacoes || "",
       ativo: equipamento.ativo !== false,
     });
@@ -167,6 +171,10 @@ function Equipamentos() {
       identificacao: form.identificacao.trim() || null,
       dataCompra: form.dataCompra || null,
       garantiaAte: form.garantiaAte || null,
+      frequenciaRevisao: form.frequenciaRevisao
+        ? Number(form.frequenciaRevisao)
+        : null,
+      tipoFrequenciaRevisao: form.tipoFrequenciaRevisao || null,
       observacoes: form.observacoes.trim() || null,
       ativo: form.ativo,
     };
