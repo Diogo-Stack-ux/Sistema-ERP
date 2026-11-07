@@ -14,6 +14,8 @@ async function criarEquipamento(req, res) {
       garantiaAte,
       observacoes,
       ativo,
+      frequenciaRevisao,
+      tipoFrequenciaRevisao,
     } = req.body;
 
     if (!clienteId || !nome) {
@@ -22,9 +24,10 @@ async function criarEquipamento(req, res) {
       });
     }
 
-    const clienteExiste = await prisma.cliente.findUnique({
+    const clienteExiste = await prisma.cliente.findFirst({
       where: {
         id: Number(clienteId),
+        empresaId: req.empresaId,
       },
     });
 
@@ -36,6 +39,7 @@ async function criarEquipamento(req, res) {
 
     const equipamento = await prisma.equipamento.create({
       data: {
+        empresaId: req.empresaId,
         clienteId: Number(clienteId),
         nome: nome.trim(),
         tipo: tipo?.trim() || null,
@@ -47,6 +51,11 @@ async function criarEquipamento(req, res) {
         garantiaAte: garantiaAte ? new Date(garantiaAte) : null,
         observacoes: observacoes?.trim() || null,
         ativo: ativo ?? true,
+        frequenciaRevisao:
+          frequenciaRevisao === "" || frequenciaRevisao === null
+            ? null
+            : Number(frequenciaRevisao),
+        tipoFrequenciaRevisao: tipoFrequenciaRevisao?.trim() || null,
       },
       include: {
         cliente: true,
@@ -67,6 +76,7 @@ async function criarEquipamento(req, res) {
 async function listarEquipamentos(req, res) {
   try {
     const equipamentos = await prisma.equipamento.findMany({
+      where: { empresaId: req.empresaId },
       include: {
         cliente: true,
       },
@@ -99,6 +109,7 @@ async function buscarEquipamentoPorId(req, res) {
     const equipamento = await prisma.equipamento.findUnique({
       where: {
         id,
+        empresaId: req.empresaId,
       },
       include: {
         cliente: true,
@@ -149,9 +160,10 @@ async function listarEquipamentosPorCliente(req, res) {
       });
     }
 
-    const clienteExiste = await prisma.cliente.findUnique({
+    const clienteExiste = await prisma.cliente.findFirst({
       where: {
         id: clienteId,
+        empresaId: req.empresaId,
       },
     });
 
@@ -164,6 +176,7 @@ async function listarEquipamentosPorCliente(req, res) {
     const equipamentos = await prisma.equipamento.findMany({
       where: {
         clienteId,
+        empresaId: req.empresaId,
       },
       orderBy: {
         createdAt: "desc",
@@ -191,9 +204,10 @@ async function atualizarEquipamento(req, res) {
       });
     }
 
-    const equipamentoExiste = await prisma.equipamento.findUnique({
+    const equipamentoExiste = await prisma.equipamento.findFirst({
       where: {
         id,
+        empresaId: req.empresaId,
       },
     });
 
@@ -215,12 +229,15 @@ async function atualizarEquipamento(req, res) {
       garantiaAte,
       observacoes,
       ativo,
+      frequenciaRevisao,
+      tipoFrequenciaRevisao,
     } = req.body;
 
     if (clienteId) {
-      const clienteExiste = await prisma.cliente.findUnique({
+      const clienteExiste = await prisma.cliente.findFirst({
         where: {
           id: Number(clienteId),
+          empresaId: req.empresaId,
         },
       });
 
@@ -234,6 +251,7 @@ async function atualizarEquipamento(req, res) {
     const equipamento = await prisma.equipamento.update({
       where: {
         id,
+        empresaId: req.empresaId,
       },
       data: {
         ...(clienteId !== undefined && {
@@ -269,6 +287,15 @@ async function atualizarEquipamento(req, res) {
         ...(ativo !== undefined && {
           ativo: Boolean(ativo),
         }),
+        ...(frequenciaRevisao !== undefined && {
+          frequenciaRevisao:
+            frequenciaRevisao === "" || frequenciaRevisao === null
+              ? null
+              : Number(frequenciaRevisao),
+        }),
+        ...(tipoFrequenciaRevisao !== undefined && {
+          tipoFrequenciaRevisao: tipoFrequenciaRevisao?.trim() || null,
+        }),
       },
       include: {
         cliente: true,
@@ -296,9 +323,10 @@ async function excluirEquipamento(req, res) {
       });
     }
 
-    const equipamento = await prisma.equipamento.findUnique({
+    const equipamento = await prisma.equipamento.findFirst({
       where: {
         id,
+        empresaId: req.empresaId,
       },
       include: {
         ordensServico: true,
@@ -321,6 +349,7 @@ async function excluirEquipamento(req, res) {
     await prisma.equipamento.delete({
       where: {
         id,
+        empresaId: req.empresaId,
       },
     });
 

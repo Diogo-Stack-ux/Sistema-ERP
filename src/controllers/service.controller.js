@@ -3,7 +3,10 @@ const prisma = require("../lib/prisma");
 exports.create = async (req, res) => {
   try {
     const service = await prisma.service.create({
-      data: req.body,
+      data: {
+        ...req.body,
+        empresaId: req.empresaId,
+      },
     });
 
     res.status(201).json(service);
@@ -17,6 +20,7 @@ exports.create = async (req, res) => {
 exports.findAll = async (req, res) => {
   try {
     const services = await prisma.service.findMany({
+      where: { empresaId: req.empresaId },
       orderBy: {
         nome: "asc",
       },
@@ -35,6 +39,7 @@ exports.findById = async (req, res) => {
     const service = await prisma.service.findUnique({
       where: {
         id: Number(req.params.id),
+        empresaId: req.empresaId,
       },
     });
 
@@ -48,11 +53,15 @@ exports.findById = async (req, res) => {
 
 exports.update = async (req, res) => {
   try {
+    const { nome, descricao, categoria, valor, garantia, duracao, ativo } =
+      req.body;
+
     const service = await prisma.service.update({
       where: {
         id: Number(req.params.id),
+        empresaId: req.empresaId,
       },
-      data: req.body,
+      data: { nome, descricao, categoria, valor, garantia, duracao, ativo },
     });
 
     res.json(service);
@@ -68,6 +77,7 @@ exports.remove = async (req, res) => {
     await prisma.service.delete({
       where: {
         id: Number(req.params.id),
+        empresaId: req.empresaId,
       },
     });
 

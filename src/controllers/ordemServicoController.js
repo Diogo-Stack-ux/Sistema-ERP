@@ -2,7 +2,7 @@ const ordemServicoService = require("../services/ordemServicoService");
 
 async function index(req, res) {
   try {
-    const ordens = await ordemServicoService.listOrdens();
+    const ordens = await ordemServicoService.listOrdens(req.empresaId);
     return res.json(ordens);
   } catch (error) {
     console.error("Erro ao listar ordens de servico:", error);
@@ -14,7 +14,10 @@ async function index(req, res) {
 
 async function show(req, res) {
   try {
-    const ordem = await ordemServicoService.getOrdemById(req.params.id);
+    const ordem = await ordemServicoService.getOrdemById(
+      req.params.id,
+      req.empresaId
+    );
 
     if (!ordem) {
       return res.status(404).json({
@@ -33,7 +36,7 @@ async function show(req, res) {
 
 async function create(req, res) {
   try {
-    const ordem = await ordemServicoService.createOrdem(req.body);
+    const ordem = await ordemServicoService.createOrdem(req.body, req.empresaId);
     return res.status(201).json(ordem);
   } catch (error) {
     console.error("Erro ao criar ordem de servico:", error);
@@ -43,13 +46,42 @@ async function create(req, res) {
   }
 }
 
+function calcularProximaRevisao(dataBase, frequencia, tipoFrequencia) {
+  const proximaData = new Date(dataBase);
+  const valor = Number(frequencia);
+
+  switch (tipoFrequencia) {
+    case "DIAS":
+      proximaData.setDate(proximaData.getDate() + valor);
+      break;
+
+    case "SEMANAS":
+      proximaData.setDate(proximaData.getDate() + valor * 7);
+      break;
+
+    case "MESES":
+      proximaData.setMonth(proximaData.getMonth() + valor);
+      break;
+
+    case "ANOS":
+      proximaData.setFullYear(proximaData.getFullYear() + valor);
+      break;
+
+    default:
+      return null;
+  }
+
+  return proximaData;
+}
+
 async function updateStatus(req, res) {
   try {
     const { status } = req.body;
 
     const ordem = await ordemServicoService.updateStatus(
       req.params.id,
-      status
+      status,
+      req.empresaId
     );
 
     return res.json(ordem);
@@ -64,7 +96,7 @@ async function updateStatus(req, res) {
 
 async function destroy(req, res) {
   try {
-    await ordemServicoService.deleteOrdem(req.params.id);
+    await ordemServicoService.deleteOrdem(req.params.id, req.empresaId);
     return res.status(204).send();
   } catch (error) {
     console.error("Erro ao excluir ordem de servico:", error);

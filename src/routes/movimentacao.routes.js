@@ -28,7 +28,7 @@ router.post("/", async (req, res) => {
 
     // Buscar produto
     const produto = await prisma.produto.findUnique({
-      where: { id: Number(produtoId) },
+      where: { id: Number(produtoId), empresaId: req.empresaId },
     });
 
     if (!produto) {
@@ -50,16 +50,17 @@ router.post("/", async (req, res) => {
 
     // Atualiza produto
     await prisma.produto.update({
-      where: { id: produto.id },
+      where: { id: produto.id, empresaId: req.empresaId },
       data: { quantidade: novaQuantidade },
     });
 
     // Cria movimentação
     const movimentacao = await prisma.movimentacao.create({
       data: {
-        produtoId,
+        produtoId: Number(produtoId),
         tipo,
-        quantidade,
+        quantidade: Number(quantidade),
+        empresaId: req.empresaId,
       },
     });
 
@@ -73,6 +74,7 @@ router.post("/", async (req, res) => {
 router.get("/", async (req, res) => {
   try {
     const movimentacoes = await prisma.movimentacao.findMany({
+      where: { empresaId: req.empresaId },
       include: { produto: true },
     });
 
@@ -89,8 +91,8 @@ router.put("/:id", async (req, res) => {
     const quantidadeNova = Number(req.body.quantidade);
     const tipoNovo = req.body.tipo;
 
-    const movimentacao = await prisma.movimentacao.findUnique({
-      where: { id },
+    const movimentacao = await prisma.movimentacao.findFirst({
+      where: { id, empresaId: req.empresaId },
     });
 
     if (!movimentacao) {
@@ -98,7 +100,7 @@ router.put("/:id", async (req, res) => {
     }
 
     const produto = await prisma.produto.findUnique({
-      where: { id: movimentacao.produtoId },
+      where: { id: movimentacao.produtoId, empresaId: req.empresaId },
     });
 
     let estoque = produto.quantidade;
@@ -122,13 +124,13 @@ router.put("/:id", async (req, res) => {
 
     // Atualizar produto
     await prisma.produto.update({
-      where: { id: produto.id },
+      where: { id: produto.id, empresaId: req.empresaId },
       data: { quantidade: estoque },
     });
 
     // Atualizar movimentação
     const movimentacaoAtualizada = await prisma.movimentacao.update({
-      where: { id },
+      where: { id, empresaId: req.empresaId },
       data: {
         tipo: tipoNovo,
         quantidade: quantidadeNova,
@@ -146,8 +148,8 @@ router.delete("/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
 
-    const movimentacao = await prisma.movimentacao.findUnique({
-      where: { id },
+    const movimentacao = await prisma.movimentacao.findFirst({
+      where: { id, empresaId: req.empresaId },
     });
 
     if (!movimentacao) {
@@ -155,7 +157,7 @@ router.delete("/:id", async (req, res) => {
     }
 
     const produto = await prisma.produto.findUnique({
-      where: { id: movimentacao.produtoId },
+      where: { id: movimentacao.produtoId, empresaId: req.empresaId },
     });
 
     let novaQuantidade = produto.quantidade;
@@ -169,13 +171,13 @@ router.delete("/:id", async (req, res) => {
 
     // Atualizar estoque
     await prisma.produto.update({
-      where: { id: produto.id },
+      where: { id: produto.id, empresaId: req.empresaId },
       data: { quantidade: novaQuantidade },
     });
 
     // Deletar movimentação
     await prisma.movimentacao.delete({
-      where: { id },
+      where: { id, empresaId: req.empresaId },
     });
 
     res.json({ message: "Movimentação deletada e estoque corrigido" });

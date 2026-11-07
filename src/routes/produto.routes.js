@@ -19,6 +19,7 @@ router.post("/", async (req, res) => {
       preco: Number(preco),
       quantidade: Number(quantidade),
       tipo,
+      empresaId: req.empresaId,
     };
 
     if (sku !== undefined && sku !== null) {
@@ -37,7 +38,9 @@ router.post("/", async (req, res) => {
 // ✅ Listar produtos
 router.get("/", async (req, res) => {
   try {
-    const produtos = await prisma.produto.findMany();
+    const produtos = await prisma.produto.findMany({
+      where: { empresaId: req.empresaId },
+    });
     res.json(produtos);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -65,7 +68,7 @@ router.put("/:id", async (req, res) => {
     }
 
     const produto = await prisma.produto.update({
-      where: { id: Number(req.params.id) },
+      where: { id: Number(req.params.id), empresaId: req.empresaId },
       data,
     });
     res.json(produto);
@@ -78,10 +81,17 @@ router.put("/:id", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   try {
     await prisma.produto.delete({
-      where: { id: Number(req.params.id) },
+      where: { id: Number(req.params.id), empresaId: req.empresaId },
     });
     res.json({ message: "Produto deletado" });
   } catch (error) {
+    if (error.code === "P2003") {
+      return res.status(409).json({
+        error:
+          "Este produto nao pode ser excluido porque esta vinculado a movimentacoes ou ordens de servico.",
+      });
+    }
+
     res.status(500).json({ error: error.message });
   }
 });

@@ -9,21 +9,27 @@ datasource db {
 
 model Cliente {
   id        Int      @id @default(autoincrement())
+  empresaId Int
   nome      String
   email     String
   telefone  String
   endereco  String
   createdAt DateTime @default(now())
 
+  empresa       Empresa        @relation(fields: [empresaId], references: [id], onDelete: Restrict)
   eventos       Evento[]
   ordensServico OrdemServico[]
   equipamentos  Equipamento[]
+  lembretes     Lembrete[]
+
+  @@index([empresaId])
 }
 
 model Produto {
   id         Int      @id @default(autoincrement())
+  empresaId  Int
   nome       String
-  sku        String?  @unique
+  sku        String?
   quantidade Int
   preco      Float
   tipo       String
@@ -31,20 +37,28 @@ model Produto {
 
   movimentacoes Movimentacao[]
   osProdutos    OSProduto[]
+  empresa       Empresa        @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+
+  @@unique([empresaId, sku])
 }
 
 model Movimentacao {
   id         Int      @id @default(autoincrement())
+  empresaId  Int
   produtoId  Int
   tipo       String
   quantidade Int
   data       DateTime @default(now())
 
   produto Produto @relation(fields: [produtoId], references: [id])
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+
+  @@index([empresaId])
 }
 
 model Gasto {
   id         Int       @id @default(autoincrement())
+  empresaId  Int
   descricao  String
   valor      Float
   tipo       String    @default("DESPESA") // DESPESA | RECEITA
@@ -52,10 +66,15 @@ model Gasto {
   status     String    @default("PENDENTE") // PENDENTE | PAGO | RECEBIDO | CANCELADO
   vencimento DateTime?
   data       DateTime  @default(now())
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+
+  @@index([empresaId])
 }
 
 model Evento {
   id        Int      @id @default(autoincrement())
+  empresaId Int
   titulo    String
   descricao String?
   tipo      String
@@ -66,6 +85,34 @@ model Evento {
   cliente   Cliente? @relation(fields: [clienteId], references: [id])
 
   createdAt DateTime @default(now())
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+
+  @@index([empresaId])
+}
+
+model Lembrete {
+  id            Int      @id @default(autoincrement())
+  empresaId     Int
+  clienteId     Int
+  equipamentoId Int?
+  titulo        String
+  mensagem      String?
+  dataLembrete  DateTime
+  status        String   @default("PENDENTE")
+  canal         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  cliente     Cliente      @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  equipamento Equipamento? @relation(fields: [equipamentoId], references: [id], onDelete: SetNull)
+  empresa     Empresa      @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+
+  @@index([empresaId])
+  @@index([clienteId])
+  @@index([equipamentoId])
+  @@index([dataLembrete])
+  @@index([status])
 }
 
 model Usuario {
@@ -74,11 +121,17 @@ model Usuario {
   email String @unique
   senha String
 
+  empresaId Int?
+  empresa   Empresa? @relation(fields: [empresaId], references: [id])
+
   createdAt DateTime @default(now())
+
+  @@index([empresaId])
 }
 
 model Service {
   id        Int     @id @default(autoincrement())
+  empresaId Int
   nome      String
   descricao String?
   categoria String?
@@ -91,10 +144,14 @@ model Service {
   updatedAt DateTime @updatedAt
 
   osServicos OSServico[]
+  empresa    Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+
+  @@index([empresaId])
 }
 
 model OrdemServico {
   id          Int      @id @default(autoincrement())
+  empresaId   Int
   clienteId   Int
   cliente     Cliente  @relation(fields: [clienteId], references: [id])
   status      String   @default("ABERTA") // ABERTA | EM_ANDAMENTO | CONCLUIDA
@@ -107,6 +164,9 @@ model OrdemServico {
   produtos      OSProduto[]
   equipamento   Equipamento? @relation(fields: [equipamentoId], references: [id])
   equipamentoId Int?
+  empresa       Empresa      @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+
+  @@index([empresaId])
 }
 
 model OSServico {
@@ -130,6 +190,7 @@ model OSProduto {
 
 model Equipamento {
   id            Int       @id @default(autoincrement())
+  empresaId     Int
   clienteId     Int
   nome          String
   tipo          String?
@@ -144,8 +205,34 @@ model Equipamento {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  frequenciaRevisao     Int?
+  tipoFrequenciaRevisao String?
+
   cliente       Cliente        @relation(fields: [clienteId], references: [id], onDelete: Cascade)
   ordensServico OrdemServico[]
+  lembretes     Lembrete[]
+  empresa       Empresa        @relation(fields: [empresaId], references: [id], onDelete: Restrict)
 
   @@index([clienteId])
+  @@index([empresaId])
+}
+
+model Empresa {
+  id        Int      @id @default(autoincrement())
+  nome      String
+  cnpj      String?  @unique
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  usuarios Usuario[]
+  clientes Cliente[]
+  produtos Produto[]
+  movimentacoes Movimentacao[]
+  gastos Gasto[]
+  eventos Evento[]
+  lembretes Lembrete[]
+  services Service[]
+  ordensServico OrdemServico[]
+  equipamentos Equipamento[]
 }

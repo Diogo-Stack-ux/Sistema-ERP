@@ -12,7 +12,7 @@ async function index(req, res) {
   try {
     const { tipo, status } = req.query;
 
-    const where = {};
+    const where = { empresaId: req.empresaId };
     if (tipo) where.tipo = tipo;
     if (status) where.status = status;
 
@@ -38,6 +38,7 @@ async function create(req, res) {
 
     const gasto = await prisma.gasto.create({
       data: {
+        empresaId: req.empresaId,
         descricao,
         valor: valorNumerico,
         tipo,
@@ -62,7 +63,7 @@ async function updateStatus(req, res) {
     }
 
     const gasto = await prisma.gasto.update({
-      where: { id: Number(req.params.id) },
+      where: { id: Number(req.params.id), empresaId: req.empresaId },
       data: { status },
     });
 
@@ -74,7 +75,9 @@ async function updateStatus(req, res) {
 
 async function destroy(req, res) {
   try {
-    await prisma.gasto.delete({ where: { id: Number(req.params.id) } });
+    await prisma.gasto.delete({
+      where: { id: Number(req.params.id), empresaId: req.empresaId },
+    });
     res.status(204).send();
   } catch (error) {
     handleError(res, error, "Erro ao excluir lançamento");
@@ -84,12 +87,20 @@ async function destroy(req, res) {
 async function total(req, res) {
   try {
     const receitas = await prisma.gasto.aggregate({
-      where: { tipo: "RECEITA", status: "RECEBIDO" },
+      where: {
+        empresaId: req.empresaId,
+        tipo: "RECEITA",
+        status: "RECEBIDO",
+      },
       _sum: { valor: true },
     });
 
     const despesas = await prisma.gasto.aggregate({
-      where: { tipo: "DESPESA", status: "PAGO" },
+      where: {
+        empresaId: req.empresaId,
+        tipo: "DESPESA",
+        status: "PAGO",
+      },
       _sum: { valor: true },
     });
 

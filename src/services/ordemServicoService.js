@@ -47,8 +47,37 @@ function parsePositiveNumber(value, fieldName) {
   return numberValue;
 }
 
-async function listOrdens() {
+function calcularProximaRevisao(dataBase, frequencia, tipoFrequencia) {
+  const proximaData = new Date(dataBase);
+  const valor = Number(frequencia);
+
+  switch (tipoFrequencia) {
+    case "DIAS":
+      proximaData.setDate(proximaData.getDate() + valor);
+      break;
+
+    case "SEMANAS":
+      proximaData.setDate(proximaData.getDate() + valor * 7);
+      break;
+
+    case "MESES":
+      proximaData.setMonth(proximaData.getMonth() + valor);
+      break;
+
+    case "ANOS":
+      proximaData.setFullYear(proximaData.getFullYear() + valor);
+      break;
+
+    default:
+      return null;
+  }
+
+  return proximaData;
+}
+
+async function listOrdens(empresaId) {
   const ordens = await prisma.ordemServico.findMany({
+    where: { empresaId },
     include: ordemInclude,
     orderBy: {
       createdAt: "desc",
@@ -58,10 +87,11 @@ async function listOrdens() {
   return ordens.map(normalizeOrdem);
 }
 
-async function getOrdemById(id) {
-  const ordem = await prisma.ordemServico.findUnique({
+async function getOrdemById(id, empresaId) {
+  const ordem = await prisma.ordemServico.findFirst({
     where: {
       id: Number(id),
+      empresaId,
     },
     include: ordemInclude,
   });
@@ -69,7 +99,7 @@ async function getOrdemById(id) {
   return normalizeOrdem(ordem);
 }
 
-async function createOrdem(data) {
+async function createOrdem(data, empresaId) {
   const {
     clienteId,
     equipamentoId,
@@ -80,9 +110,10 @@ async function createOrdem(data) {
 
   const clienteIdNumber = parsePositiveId(clienteId, "Cliente");
 
-  const cliente = await prisma.cliente.findUnique({
+  const cliente = await prisma.cliente.findFirst({
     where: {
       id: clienteIdNumber,
+      empresaId,
     },
   });
 
@@ -95,9 +126,10 @@ async function createOrdem(data) {
   if (equipamentoId !== null && equipamentoId !== undefined && equipamentoId !== "") {
     equipamentoIdNumber = parsePositiveId(equipamentoId, "Equipamento");
 
-    const equipamento = await prisma.equipamento.findUnique({
+    const equipamento = await prisma.equipamento.findFirst({
       where: {
         id: equipamentoIdNumber,
+        empresaId,
       },
     });
 
@@ -140,6 +172,7 @@ async function createOrdem(data) {
 
   const servicosEncontrados = await prisma.service.findMany({
     where: {
+      empresaId,
       id: {
         in: servicosNormalizados.map((item) => item.serviceId),
       },
@@ -162,6 +195,7 @@ async function createOrdem(data) {
   if (produtosNormalizados.length > 0) {
     const produtosEncontrados = await prisma.produto.findMany({
       where: {
+        empresaId,
         id: {
           in: produtosNormalizados.map((item) => item.produtoId),
         },
@@ -203,6 +237,7 @@ async function createOrdem(data) {
 
   const ordem = await prisma.ordemServico.create({
     data: {
+      empresaId,
       clienteId: clienteIdNumber,
       equipamentoId: equipamentoIdNumber,
       observacoes: observacoesNormalizadas,
@@ -230,7 +265,7 @@ async function createOrdem(data) {
   return normalizeOrdem(ordem);
 }
 
-async function updateStatus(id, status) {
+async function updateStatus(id, status, empresaId) {
   const ordemId = parsePositiveId(id, "Ordem de servico");
 
   const statusPermitidos = [
@@ -244,12 +279,15 @@ async function updateStatus(id, status) {
     throw createHttpError("Status invalido");
   }
 
-  const ordem = await prisma.ordemServico.findUnique({
+  const ordem = await prisma.ordemServico.findFirst({
     where: {
       id: ordemId,
+      empresaId,
     },
     include: {
       produtos: true,
+      cliente: true,
+      equipamento: true,
     },
   });
 
@@ -263,6 +301,7 @@ async function updateStatus(id, status) {
         const produto = await tx.produto.findUnique({
           where: {
             id: item.produtoId,
+            empresaId,
           },
         });
 
@@ -279,6 +318,7 @@ async function updateStatus(id, status) {
         await tx.produto.update({
           where: {
             id: item.produtoId,
+            empresaId,
           },
           data: {
             quantidade: {
@@ -289,6 +329,7 @@ async function updateStatus(id, status) {
 
         await tx.movimentacao.create({
           data: {
+            empresaId,
             produtoId: item.produtoId,
             tipo: "SAIDA",
             quantidade: item.quantidade,
@@ -299,6 +340,7 @@ async function updateStatus(id, status) {
 
       await tx.gasto.create({
         data: {
+          empresaId,
           descricao: `Receita OS #${ordem.id}`,
           valor: -Number(ordem.valorTotal),
           data: new Date(),
@@ -308,19 +350,48 @@ async function updateStatus(id, status) {
       await tx.ordemServico.update({
         where: {
           id: ordemId,
+          empresaId,
         },
         data: {
           status,
         },
       });
+
+      if (
+        ordem.equipamento &&
+        ordem.equipamento.frequenciaRevisao &&
+        ordem.equipamento.tipoFrequenciaRevisao
+      ) {
+        const proximaRevisao = calcularProximaRevisao(
+          new Date(),
+          ordem.equipamento.frequenciaRevisao,
+          ordem.equipamento.tipoFrequenciaRevisao
+        );
+
+        if (proximaRevisao) {
+          await tx.lembrete.create({
+            data: {
+              empresaId,
+              clienteId: ordem.clienteId,
+              equipamentoId: ordem.equipamento.id,
+              titulo: `Revisão - ${ordem.equipamento.nome}`,
+              mensagem: `Revisão programada do equipamento ${ordem.equipamento.nome}.`,
+              dataLembrete: proximaRevisao,
+              status: "PENDENTE",
+              canal: "SISTEMA",
+            },
+          });
+        }
+      }
     });
 
-    return getOrdemById(ordemId);
+    return getOrdemById(ordemId, empresaId);
   }
 
   const ordemAtualizada = await prisma.ordemServico.update({
     where: {
       id: ordemId,
+      empresaId,
     },
     data: {
       status,
@@ -331,12 +402,13 @@ async function updateStatus(id, status) {
   return normalizeOrdem(ordemAtualizada);
 }
 
-async function deleteOrdem(id) {
+async function deleteOrdem(id, empresaId) {
   const ordemId = parsePositiveId(id, "Ordem de servico");
 
-  const ordem = await prisma.ordemServico.findUnique({
+  const ordem = await prisma.ordemServico.findFirst({
     where: {
       id: ordemId,
+      empresaId,
     },
   });
 
@@ -354,6 +426,7 @@ async function deleteOrdem(id) {
   return prisma.ordemServico.delete({
     where: {
       id: ordemId,
+      empresaId,
     },
   });
 }

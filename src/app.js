@@ -13,6 +13,7 @@ const authRoutes = require("./routes/auth.routes");
 const billingRoutes = require("./routes/billing.routes");
 const serviceRoutes = require("./routes/service.routes");
 const ordemServicoRoutes = require("./routes/ordemServicoRoutes");
+const lembreteRoutes = require("./routes/lembrete.routes");
 const prisma = require("./lib/prisma");
 const auth = require("./middlewares/auth");
 const requireSubscription = require("./middlewares/subscription");
@@ -51,6 +52,7 @@ app.use("/dashboard", dashboardRoutes);
 app.use("/services", serviceRoutes);
 app.use("/ordens-servico", ordemServicoRoutes);
 app.use("/equipamentos", equipamentoRoutes);
+app.use("/lembretes", lembreteRoutes);
 
 
 

@@ -7,17 +7,28 @@ router.use(auth);
 
 // ✅ Criar cliente
 router.post("/", async (req, res) => {
-  console.log("🔥 CHEGOU REQUISIÇÃO");
-  console.log(req.body);
   try {
+    const { nome, email = "", telefone = "", endereco = "" } = req.body || {};
+    if (typeof nome !== "string" || !nome.trim()) {
+      return res.status(400).json({ error: "Informe o nome do cliente." });
+    }
+    if (![email, telefone, endereco].every((value) => typeof value === "string")) {
+      return res.status(400).json({ error: "Email, telefone e endereco devem ser textos." });
+    }
     const cliente = await prisma.cliente.create({
-      data: req.body,
+      data: {
+        nome: nome.trim(),
+        email: email.trim(),
+        telefone: telefone.trim(),
+        endereco: endereco.trim(),
+        empresaId: req.empresaId,
+      },
     });
 
-    res.json(cliente);
+    res.status(201).json(cliente);
   } catch (error) {
     console.error("ERRO:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Nao foi possivel cadastrar o cliente. Tente novamente." });
   }
 });
 
@@ -25,7 +36,9 @@ router.post("/", async (req, res) => {
 // ✅ Listar clientes
 router.get("/", auth, async (req, res) => {
   try {
-    const clientes = await prisma.cliente.findMany();
+    const clientes = await prisma.cliente.findMany({
+      where: { empresaId: req.empresaId },
+    });
     res.json(clientes);
   } catch (error) {
     console.error("ERRO:", error);
@@ -37,10 +50,11 @@ router.get("/", auth, async (req, res) => {
 router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
+    const { nome, email, telefone, endereco } = req.body;
 
     const cliente = await prisma.cliente.update({
-      where: { id: Number(id) },
-      data: req.body,
+      where: { id: Number(id), empresaId: req.empresaId },
+      data: { nome, email, telefone, endereco },
     });
 
     res.json(cliente);
@@ -57,7 +71,7 @@ router.delete("/:id", async (req, res) => {
     const { id } = req.params;
 
     await prisma.cliente.delete({
-      where: { id: Number(id) },
+      where: { id: Number(id), empresaId: req.empresaId },
     });
 
     res.json({ message: "Cliente deletado com sucesso" });
@@ -74,6 +88,7 @@ router.get("/:id/perfil", async (req, res) => {
     const cliente = await prisma.cliente.findUnique({
       where: {
         id,
+        empresaId: req.empresaId,
       },
       include: {
         ordensServico: {

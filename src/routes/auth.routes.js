@@ -31,7 +31,7 @@ router.post("/register", async (req, res) => {
 
   try {
 
-    const { nome, email, senha } = req.body;
+    const { nome, email, senha } = req.body || {};
 
     if (!nome || !email || !senha) {
       return res.status(400).json({
@@ -55,14 +55,16 @@ router.post("/register", async (req, res) => {
     const senhaHash =
       await bcrypt.hash(senha, 10);
 
-    const usuario =
-      await prisma.usuario.create({
-        data: {
-          nome,
-          email,
-          senha: senhaHash,
+    const usuario = await prisma.usuario.create({
+      data: {
+        nome,
+        email,
+        senha: senhaHash,
+        empresa: {
+          create: { nome },
         },
-      });
+      },
+    });
 
     res.json(sanitizeUsuario(usuario));
 
@@ -81,7 +83,7 @@ router.post("/login", async (req, res) => {
 
   try {
 
-    const { email, senha } = req.body;
+    const { email, senha } = req.body || {};
 
     if (!email || !senha) {
       return res.status(400).json({
@@ -116,6 +118,17 @@ router.post("/login", async (req, res) => {
         });
     }
 
+    if (!usuario.empresaId) {
+      const empresa = await prisma.empresa.create({
+        data: { nome: usuario.nome },
+      });
+
+      await prisma.usuario.update({
+        where: { id: usuario.id },
+        data: { empresaId: empresa.id },
+      });
+    }
+
     const token = gerarToken(usuario);
 
     res.json({
@@ -137,7 +150,7 @@ router.post("/google", async (req, res) => {
 
   try {
 
-    const { credential } = req.body;
+    const { credential } = req.body || {};
     const googleClientId = process.env.GOOGLE_CLIENT_ID;
 
     if (!googleClientId || googleClientId.includes("seu-client-id-do-google")) {
@@ -188,7 +201,21 @@ router.post("/google", async (req, res) => {
           nome: googleUser.name || googleUser.email,
           email: googleUser.email,
           senha: senhaHash,
+          empresa: {
+            create: { nome: googleUser.name || googleUser.email.split("@")[0] },
+          },
         },
+      });
+    }
+
+    if (!usuario.empresaId) {
+      const empresa = await prisma.empresa.create({
+        data: { nome: usuario.nome },
+      });
+
+      await prisma.usuario.update({
+        where: { id: usuario.id },
+        data: { empresaId: empresa.id },
       });
     }
 

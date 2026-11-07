@@ -9,20 +9,27 @@ router.get("/", async (req, res) => {
   try {
     const [totalClientes, totalProdutos, estoque, gastos, estoqueBaixo] =
       await Promise.all([
-        prisma.cliente.count(),
-        prisma.produto.count(),
+        prisma.cliente.count({
+          where: { empresaId: req.empresaId },
+        }),
+        prisma.produto.count({
+          where: { empresaId: req.empresaId },
+        }),
         prisma.produto.aggregate({
+          where: { empresaId: req.empresaId },
           _sum: {
             quantidade: true,
           },
         }),
         prisma.gasto.aggregate({
+          where: { empresaId: req.empresaId },
           _sum: {
             valor: true,
           },
         }),
         prisma.produto.findMany({
           where: {
+            empresaId: req.empresaId,
             quantidade: {
               lte: 5,
             },

@@ -9,6 +9,7 @@ router.use(auth);
 router.get("/", async (req, res) => {
   try {
     const eventos = await prisma.evento.findMany({
+      where: { empresaId: req.empresaId },
       include: {
         cliente: true,
       },
@@ -36,8 +37,22 @@ router.post("/", async (req, res) => {
       concluido,
     } = req.body;
 
+    if (clienteId) {
+      const cliente = await prisma.cliente.findFirst({
+        where: {
+          id: Number(clienteId),
+          empresaId: req.empresaId,
+        },
+      });
+
+      if (!cliente) {
+        return res.status(404).json({ error: "Cliente não encontrado" });
+      }
+    }
+
     const evento = await prisma.evento.create({
       data: {
+        empresaId: req.empresaId,
         titulo,
         descricao,
         tipo,
@@ -70,9 +85,23 @@ router.put("/:id", async (req, res) => {
       concluido,
     } = req.body;
 
+    if (clienteId) {
+      const cliente = await prisma.cliente.findFirst({
+        where: {
+          id: Number(clienteId),
+          empresaId: req.empresaId,
+        },
+      });
+
+      if (!cliente) {
+        return res.status(404).json({ error: "Cliente não encontrado" });
+      }
+    }
+
     const evento = await prisma.evento.update({
       where: {
         id: Number(id),
+        empresaId: req.empresaId,
       },
       data: {
         titulo,
@@ -99,6 +128,7 @@ router.delete("/:id", async (req, res) => {
     await prisma.evento.delete({
       where: {
         id: Number(id),
+        empresaId: req.empresaId,
       },
     });
 
